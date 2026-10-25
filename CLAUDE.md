@@ -3,8 +3,11 @@
 This repo is **documentation-first**. The docs in `docs/` are the source of truth; implement them, do not redesign them.
 
 ## Current state
-Phase 0 is implemented (`apps/server`, `apps/web`, `packages/protocol`). Run `npm test` and `npm run typecheck` before
-and after changes. Next is Phase 1: SQLite persistence (replace `RunStore`), CEO plan → multiple agents, React Flow canvas.
+Phases 0 and 1 are implemented. Run `npm test` and `npm run typecheck` before and after changes.
+Key files: `apps/server/src/orchestrator.ts` (run lifecycle), `session.ts` (one SDK session per step),
+`plan.ts` (CEO prompts + plan validation), `store.ts` (SQLite), `apps/web/src/run-state.ts` (event reducer),
+`graph.ts` + `Canvas.tsx` (React Flow). Next is Phase 2: full roster, coder⇄reviewer loop, CEO review, retries,
+approval modes, pause.
 
 ## Order of work
 1. Read `README.md`, then docs 1, 2, 3, 6, 7, 11 and `docs/agents/`.

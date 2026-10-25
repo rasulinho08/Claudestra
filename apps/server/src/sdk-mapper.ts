@@ -1,7 +1,7 @@
 // Translates Agent SDK messages into Claudestra events (docs/06 "Mapping SDK messages → events").
 // Stateful: groups streamed deltas by message id and dedupes per-message usage.
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import { TOOL_OUTPUT_LIMIT, type EventData, type Usage } from "@claudestra/protocol";
+import { emptyUsage, TOOL_OUTPUT_LIMIT, type EventData, type Usage } from "@claudestra/protocol";
 
 type Block = { type: string; [key: string]: unknown };
 
@@ -20,8 +20,6 @@ function stringifyToolContent(content: unknown): string {
   return content === undefined ? "" : JSON.stringify(content);
 }
 
-const emptyUsage = (): Usage => ({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 });
-
 function toUsage(raw: Record<string, unknown> | undefined | null): Usage {
   const n = (v: unknown) => (typeof v === "number" ? v : 0);
   return {
@@ -32,10 +30,22 @@ function toUsage(raw: Record<string, unknown> | undefined | null): Usage {
   };
 }
 
+// How the session ended, read by the orchestrator after the stream finishes.
+export type SessionOutcome = {
+  ok: boolean;
+  text: string;
+  structured?: unknown;
+  costUsd: number | null;
+  durationMs: number;
+  numTurns: number;
+  error?: string;
+};
+
 export class SdkEventMapper {
   private streamingMessageId: string | null = null;
   private usageByMessage = new Map<string, Usage>();
   private answer = "";
+  outcome: SessionOutcome | null = null;
 
   constructor(private task: string) {}
 
@@ -99,19 +109,19 @@ export class SdkEventMapper {
       case "result": {
         const usage = { ...toUsage(msg.usage as unknown as Record<string, unknown>), costUsd: msg.total_cost_usd };
         if (msg.subtype === "success" && !msg.is_error) {
-          const answer = msg.result || this.answer;
+          const text = msg.result || this.answer;
+          this.outcome = { ok: true, text, structured: msg.structured_output, costUsd: msg.total_cost_usd, durationMs: msg.duration_ms, numTurns: msg.num_turns };
           return [
             { type: "usage.updated", data: usage },
-            { type: "step.succeeded", data: { summary: answer.slice(0, 300), costUsd: msg.total_cost_usd, durationMs: msg.duration_ms } },
-            { type: "run.completed", data: { answer, totalCostUsd: msg.total_cost_usd, durationMs: msg.duration_ms, numTurns: msg.num_turns } },
+            { type: "step.succeeded", data: { summary: text.slice(0, 300), costUsd: msg.total_cost_usd, durationMs: msg.duration_ms } },
           ];
         }
         const error =
           "errors" in msg && msg.errors.length > 0 ? msg.errors.join("; ") : `${msg.subtype}${"result" in msg && msg.result ? `: ${msg.result}` : ""}`;
+        this.outcome = { ok: false, text: this.answer, costUsd: msg.total_cost_usd, durationMs: msg.duration_ms, numTurns: msg.num_turns, error };
         return [
           { type: "usage.updated", data: usage },
           { type: "step.failed", data: { error } },
-          { type: "run.failed", data: { error } },
         ];
       }
 

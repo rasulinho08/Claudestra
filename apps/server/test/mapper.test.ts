@@ -33,13 +33,11 @@ test("maps a full SDK session to step and run events", () => {
 
   assert.deepEqual(out.map((e) => e.type), [
     "step.started", "step.message", "step.message", "tool.called", "usage.updated", "tool.result",
-    "usage.updated", "step.succeeded", "run.completed",
+    "usage.updated", "step.succeeded",
   ]);
   assert.deepEqual(out[1]!.data, { messageId: "msg1", text: "Hel", partial: true, role: "assistant" });
   assert.equal((out[5]!.data as { output: string }).output, "file body");
-  const done = out.at(-1)!;
-  assert.equal(done.type, "run.completed");
-  if (done.type === "run.completed") assert.equal(done.data.totalCostUsd, 0.01);
+  assert.deepEqual(mapper.outcome, { ok: true, text: "Done", structured: undefined, costUsd: 0.01, durationMs: 1200, numTurns: 2 });
 });
 
 test("dedupes usage when the SDK repeats an assistant message id", () => {
@@ -51,11 +49,14 @@ test("dedupes usage when the SDK repeats an assistant message id", () => {
   if (usage?.type === "usage.updated") assert.equal(usage.data.inputTokens, 10);
 });
 
-test("error results become step.failed + run.failed", () => {
-  const out = new SdkEventMapper("x").map(
+test("error results become step.failed with a failed outcome", () => {
+  const mapper = new SdkEventMapper("x");
+  const out = mapper.map(
     m({ type: "result", subtype: "error_max_budget_usd", is_error: true, errors: [], total_cost_usd: 0.5, usage: {}, duration_ms: 1, num_turns: 3 }),
   );
-  assert.deepEqual(out.map((e) => e.type), ["usage.updated", "step.failed", "run.failed"]);
+  assert.deepEqual(out.map((e) => e.type), ["usage.updated", "step.failed"]);
+  assert.equal(mapper.outcome?.ok, false);
+  assert.equal(mapper.outcome?.error, "error_max_budget_usd");
 });
 
 test("ignores subagent messages in phase 0", () => {
@@ -91,17 +92,29 @@ test("hook mapper pairs tool calls without tool_use_id", () => {
   assert.deepEqual(h.map("Unknown", {}), []);
 });
 
-test("store assigns seq, tracks status and cost, notifies listeners", () => {
-  const store = new RunStore(2);
+test("store assigns seq, projects status and cost, notifies listeners, survives reopen", () => {
+  const store = new RunStore(":memory:");
   store.create({ id: "r1", prompt: "p", source: "claudestra" });
   const seen: number[] = [];
   store.subscribe("r1", (e) => seen.push(e.seq));
-  store.append("r1", { type: "usage.updated", data: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 0.2 } });
-  store.append("r1", { type: "run.completed", data: { answer: "a", totalCostUsd: 0.2, durationMs: 1, numTurns: 1 } });
-  assert.deepEqual(seen, [1, 2]);
+  store.append("r1", { type: "step.started", data: { task: "t", model: "m", tools: [] } }, { stepId: "s1", agentId: "coder" });
+  store.append("r1", { type: "usage.updated", data: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 0.2, runCostUsd: 0.2 } }, { stepId: "s1" });
+  store.append("r1", { type: "run.completed", data: { answer: "a", totalCostUsd: 0.25, durationMs: 1, numTurns: 1 } });
+  assert.deepEqual(seen, [1, 2, 3]);
   assert.equal(store.status("r1"), "completed");
-  assert.equal(store.list()[0]?.costUsd, 0.2);
-  store.create({ id: "r2", prompt: "p", source: "claudestra" });
-  store.create({ id: "r3", prompt: "p", source: "claudestra" });
-  assert.equal(store.has("r1"), false);
+  assert.equal(store.list()[0]?.costUsd, 0.25);
+  const events = store.events("r1");
+  assert.equal(events[0]?.stepId, "s1");
+  assert.equal(events[0]?.agentId, "coder");
+  assert.deepEqual(store.events("r1", 2).map((e) => e.seq), [3]);
+  assert.throws(() => store.append("r1", { type: "step.failed", data: {} } as never));
+});
+
+test("failInterrupted closes runs left running", () => {
+  const store = new RunStore(":memory:");
+  store.create({ id: "r1", prompt: "p", source: "claudestra" });
+  store.create({ id: "obs-1", prompt: "p", source: "observer" });
+  assert.equal(store.failInterrupted(), 1);
+  assert.equal(store.status("r1"), "failed");
+  assert.equal(store.status("obs-1"), "running");
 });

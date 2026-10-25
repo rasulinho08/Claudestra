@@ -68,13 +68,13 @@ Option A remains available *inside* a step (an agent may use SDK subagents for i
 
 | Layer | Choice | Why |
 |---|---|---|
-| Runtime | Node 22+ / TypeScript | Agent SDK is first-class in TS |
+| Runtime | Node 22.13+ / TypeScript | Agent SDK is first-class in TS |
 | HTTP | Hono or Fastify | Light, SSE support |
 | Live transport | SSE (default), WebSocket later | One-way stream fits; simple reconnect via `Last-Event-ID` |
-| DB | SQLite (better-sqlite3 + Drizzle) | Zero ops, replay-friendly |
-| Frontend | React + Vite + `@xyflow/react` (React Flow) | Node graph out of the box |
+| DB | SQLite via built-in `node:sqlite` (plain SQL) | Zero ops, no native build step, replay-friendly |
+| Frontend | React + Vite + `@xyflow/react` (React Flow) + dagre layout | Node graph out of the box |
 | State | Zustand | Event-reducer store |
-| Styling | Tailwind | Matches the existing repo |
+| Styling | Plain CSS with theme tokens | Small; Tailwind can come later |
 | Validation | Zod | Plans, events, configs |
 
 ## Repo layout (repo root)

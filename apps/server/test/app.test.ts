@@ -2,12 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createApp, type RunStarter } from "../src/app.ts";
 import { RunStore } from "../src/store.ts";
-import type { Config } from "../src/config.ts";
+import { testAgents, testConfig } from "./helpers.ts";
 
-const config: Config = {
-  authMode: "claude_cli_login", host: "127.0.0.1", port: 0, model: "m",
-  runBudgetUsd: 0.5, maxTurns: 3, workspacesDir: "/tmp/claudestra-test",
-};
+const config = testConfig();
 
 function fakeRunner(store: RunStore): RunStarter {
   return {
@@ -43,7 +40,7 @@ async function readEvents(res: Response, count: number): Promise<{ id: string; d
 
 test("POST /api/runs then SSE replays all events in order, and resumes after Last-Event-ID", async () => {
   const store = new RunStore();
-  const app = createApp(config, store, fakeRunner(store));
+  const app = createApp(config, store, testAgents(), fakeRunner(store));
 
   assert.equal((await app.request("/api/runs", { method: "POST", body: "{}", headers: { "content-type": "application/json" } })).status, 400);
 
@@ -60,7 +57,7 @@ test("POST /api/runs then SSE replays all events in order, and resumes after Las
 
 test("observer hooks create a run per Claude Code session", async () => {
   const store = new RunStore();
-  const app = createApp({ ...config, authMode: "observer" }, store, fakeRunner(store));
+  const app = createApp({ ...config, authMode: "observer" }, store, testAgents(), fakeRunner(store));
   const post = (event: string, body: object) =>
     app.request(`/hooks/${event}`, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
 

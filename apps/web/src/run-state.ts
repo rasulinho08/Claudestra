@@ -1,25 +1,48 @@
 // Pure reducer: run view state is derived only from protocol events (docs/07 "Design principles").
-import type { ClaudestraEvent, RunStatus, Usage } from "@claudestra/protocol";
+import { CEO_FINAL_STEP, emptyUsage, type AgentInfo, type ClaudestraEvent, type Plan, type RunStatus, type StepStatus, type Usage } from "@claudestra/protocol";
 
 export type TimelineItem =
   | { kind: "message"; id: string; role: "assistant" | "user" | "system"; text: string; streaming: boolean }
   | { kind: "thinking"; id: string; text: string }
   | { kind: "tool"; id: string; tool: string; input: unknown; result?: { ok: boolean; output: string; truncated: boolean } }
   | { kind: "denied"; id: string; tool: string; reason: string }
+  | { kind: "handoff"; id: string; from: string; summary: string }
+  | { kind: "artifact"; id: string; title: string; path: string }
   | { kind: "error"; id: string; text: string };
+
+export type StepView = {
+  id: string;
+  agentId: string;
+  task: string;
+  status: StepStatus;
+  model?: string;
+  items: TimelineItem[];
+  usage: Usage;
+  costUsd: number | null;
+  lastTool?: string;
+  startedAt?: string;
+  endedAt?: string;
+  note?: string;
+};
+
+export type Handoff = { from: string; to: string; summary: string };
 
 export type RunView = {
   lastSeq: number;
   prompt: string;
+  source?: "claudestra" | "observer";
   status: RunStatus | "connecting";
-  model?: string;
-  apiKeySource?: string;
   budgetUsd: number | null;
-  usage: Usage;
+  agents: Record<string, AgentInfo>;
+  plan?: Plan;
+  steps: Record<string, StepView>;
+  order: string[];
+  handoffs: Handoff[];
   costUsd: number | null;
   durationMs?: number;
   answer?: string;
-  items: TimelineItem[];
+  error?: string;
+  budgetWarning?: string;
 };
 
 export const emptyRun = (): RunView => ({
@@ -27,64 +50,124 @@ export const emptyRun = (): RunView => ({
   prompt: "",
   status: "connecting",
   budgetUsd: null,
-  usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
+  agents: {},
+  steps: {},
+  order: [],
+  handoffs: [],
   costUsd: null,
-  items: [],
 });
+
+const TERMINAL_STEP: StepStatus[] = ["succeeded", "failed", "skipped", "cancelled"];
+
+function ensureStep(state: RunView, id: string, agentId = "assistant", task = "") {
+  if (state.steps[id]) return;
+  state.steps = { ...state.steps, [id]: { id, agentId, task, status: "pending", items: [], usage: emptyUsage(), costUsd: null } };
+  state.order = [...state.order, id];
+}
+
+function updateStep(state: RunView, id: string, patch: (s: StepView) => Partial<StepView>) {
+  const step = state.steps[id];
+  if (!step) return;
+  state.steps = { ...state.steps, [id]: { ...step, ...patch(step) } };
+}
+
+function closeOpenSteps(state: RunView, running: StepStatus, pending: StepStatus) {
+  for (const step of Object.values(state.steps)) {
+    if (TERMINAL_STEP.includes(step.status)) continue;
+    updateStep(state, step.id, (s) => ({ status: s.status === "running" ? running : pending }));
+  }
+}
 
 export function reduceRun(state: RunView, event: ClaudestraEvent): RunView {
   if (event.seq <= state.lastSeq) return state;
   const next: RunView = { ...state, lastSeq: event.seq };
-  const items = state.items.slice();
-  next.items = items;
+  const stepId = event.stepId;
+
+  if (stepId) ensureStep(next, stepId, event.agentId);
+  const push = (item: TimelineItem) => {
+    if (stepId) updateStep(next, stepId, (s) => ({ items: [...s.items, item] }));
+  };
 
   switch (event.type) {
     case "run.started":
       next.prompt = event.data.prompt;
+      next.source = event.data.source;
       next.status = "running";
       next.budgetUsd = event.data.budgetUsd;
+      next.agents = Object.fromEntries(event.data.agents.map((a) => [a.id, a]));
+      break;
+    case "plan.created":
+      next.plan = event.data.plan;
+      for (const step of event.data.plan.steps) ensureStep(next, step.id, step.agent, step.task);
+      if (event.data.plan.route === "team") ensureStep(next, CEO_FINAL_STEP, "ceo", "Write the final answer");
+      break;
+    case "step.ready":
+      updateStep(next, stepId!, (s) => ({ status: s.status === "pending" ? "ready" : s.status, task: event.data.task || s.task }));
       break;
     case "step.started":
-      next.model = event.data.model;
-      next.apiKeySource = event.data.apiKeySource;
+      updateStep(next, stepId!, (s) => ({ status: "running", task: s.task || event.data.task, model: event.data.model, startedAt: event.ts }));
       break;
     case "step.message": {
       const { messageId, text, partial, role } = event.data;
-      const idx = items.findIndex((i) => i.kind === "message" && i.id === messageId);
-      const existing = idx >= 0 ? (items[idx] as Extract<TimelineItem, { kind: "message" }>) : undefined;
-      if (!existing) {
-        items.push({ kind: "message", id: messageId, role, text, streaming: partial });
-      } else if (partial) {
-        items[idx] = { ...existing, text: existing.text + text };
-      } else {
+      updateStep(next, stepId!, (s) => {
+        const items = s.items.slice();
+        const idx = items.findIndex((i) => i.kind === "message" && i.id === messageId);
+        const existing = idx >= 0 ? (items[idx] as Extract<TimelineItem, { kind: "message" }>) : undefined;
+        if (!existing) items.push({ kind: "message", id: messageId, role, text, streaming: partial });
+        else if (partial) items[idx] = { ...existing, text: existing.text + text };
         // Final text replaces streamed deltas; further final blocks of the same message are appended.
-        items[idx] = { ...existing, text: existing.streaming ? text : `${existing.text}\n\n${text}`, streaming: false };
-      }
+        else items[idx] = { ...existing, text: existing.streaming ? text : `${existing.text}\n\n${text}`, streaming: false };
+        return { items };
+      });
       break;
     }
     case "step.thinking":
-      items.push({ kind: "thinking", id: `th-${event.seq}`, text: event.data.text });
+      push({ kind: "thinking", id: `th-${event.seq}`, text: event.data.text });
+      break;
+    case "step.handoff":
+      next.handoffs = [...next.handoffs, event.data];
+      push({ kind: "handoff", id: `h-${event.seq}`, from: event.data.from, summary: event.data.summary });
       break;
     case "tool.called":
-      items.push({ kind: "tool", id: event.data.callId, tool: event.data.tool, input: event.data.input });
+      push({ kind: "tool", id: event.data.callId, tool: event.data.tool, input: event.data.input });
+      updateStep(next, stepId!, () => ({ lastTool: event.data.tool }));
       break;
     case "tool.result": {
-      const idx = items.findIndex((i) => i.kind === "tool" && i.id === event.data.callId);
-      const { ok, output, truncated } = event.data;
-      if (idx >= 0) items[idx] = { ...(items[idx] as Extract<TimelineItem, { kind: "tool" }>), result: { ok, output, truncated } };
+      const { callId, ok, output, truncated } = event.data;
+      updateStep(next, stepId!, (s) => ({
+        items: s.items.map((i) => (i.kind === "tool" && i.id === callId ? { ...i, result: { ok, output, truncated } } : i)),
+      }));
       break;
     }
     case "tool.denied":
-      items.push({ kind: "denied", id: `d-${event.seq}`, tool: event.data.tool, reason: event.data.reason });
+      push({ kind: "denied", id: `d-${event.seq}`, tool: event.data.tool, reason: event.data.reason });
+      break;
+    case "artifact.created":
+      push({ kind: "artifact", id: event.data.id, title: event.data.title, path: event.data.path });
       break;
     case "usage.updated": {
-      const { costUsd, ...usage } = event.data;
-      next.usage = usage;
-      if (costUsd !== null) next.costUsd = costUsd;
+      const { costUsd, runCostUsd, ...usage } = event.data;
+      if (stepId) updateStep(next, stepId, (s) => ({ usage, costUsd: costUsd ?? s.costUsd }));
+      if (runCostUsd !== null) next.costUsd = runCostUsd;
       break;
     }
+    case "step.succeeded":
+      updateStep(next, stepId!, (s) => ({ status: "succeeded", endedAt: event.ts, costUsd: event.data.costUsd ?? s.costUsd }));
+      break;
     case "step.failed":
-      items.push({ kind: "error", id: `e-${event.seq}`, text: event.data.error });
+      updateStep(next, stepId!, (s) => ({ status: "failed", endedAt: event.ts, items: [...s.items, { kind: "error", id: `e-${event.seq}`, text: event.data.error }] }));
+      break;
+    case "step.skipped":
+      updateStep(next, stepId!, () => ({ status: "skipped", note: event.data.reason }));
+      break;
+    case "step.cancelled":
+      updateStep(next, stepId!, () => ({ status: "cancelled" }));
+      break;
+    case "budget.warning":
+      next.budgetWarning = `80% of the $${event.data.limitUsd.toFixed(2)} budget used`;
+      break;
+    case "budget.exceeded":
+      next.budgetWarning = `Budget of $${event.data.limitUsd.toFixed(2)} reached; remaining steps skipped`;
       break;
     case "run.completed":
       next.status = "completed";
@@ -94,15 +177,31 @@ export function reduceRun(state: RunView, event: ClaudestraEvent): RunView {
       break;
     case "run.failed":
       next.status = "failed";
-      if (!items.some((i) => i.kind === "error" && i.text === event.data.error)) {
-        items.push({ kind: "error", id: `e-${event.seq}`, text: event.data.error });
-      }
+      next.error = event.data.error;
+      closeOpenSteps(next, "failed", "skipped");
       break;
     case "run.cancelled":
       next.status = "cancelled";
-      break;
-    case "step.succeeded":
+      closeOpenSteps(next, "cancelled", "cancelled");
       break;
   }
   return next;
+}
+
+export function totalUsage(run: RunView): Usage {
+  const total = emptyUsage();
+  for (const s of Object.values(run.steps)) {
+    total.inputTokens += s.usage.inputTokens;
+    total.outputTokens += s.usage.outputTokens;
+    total.cacheReadTokens += s.usage.cacheReadTokens;
+    total.cacheCreationTokens += s.usage.cacheCreationTokens;
+  }
+  return total;
+}
+
+// Most recently started step that is still running, for "follow active".
+export function activeStep(run: RunView): string | undefined {
+  const running = run.order.map((id) => run.steps[id]!).filter((s) => s.status === "running");
+  running.sort((a, b) => (b.startedAt ?? "").localeCompare(a.startedAt ?? ""));
+  return running[0]?.id;
 }

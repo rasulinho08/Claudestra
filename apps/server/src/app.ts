@@ -4,14 +4,15 @@ import { streamSSE } from "hono/streaming";
 import { CreateRunRequest, type ClaudestraEvent, type HealthResponse } from "@claudestra/protocol";
 import type { Config } from "./config.ts";
 import { resolveSdkAuth } from "./auth.ts";
-import { RunStore } from "./store.ts";
+import type { RunStore } from "./store.ts";
+import type { AgentRegistry } from "./agents.ts";
 import { HookEventMapper, type HookPayload } from "./hook-mapper.ts";
 
 export type RunStarter = { start(runId: string, prompt: string): Promise<void>; cancel(runId: string): boolean };
 
 const HEARTBEAT_MS = 15_000;
 
-export function createApp(config: Config, store: RunStore, runner: RunStarter) {
+export function createApp(config: Config, store: RunStore, agents: AgentRegistry, runner: RunStarter) {
   const app = new Hono();
   const observers = new Map<string, HookEventMapper>();
 
@@ -21,7 +22,8 @@ export function createApp(config: Config, store: RunStore, runner: RunStarter) {
       ok: true,
       authMode: config.authMode,
       canStartRuns: auth.ok,
-      model: config.model,
+      models: config.models,
+      agents: agents.infos(),
       warning: auth.ok ? auth.warning : auth.reason,
     };
     return c.json(body);
@@ -40,7 +42,7 @@ export function createApp(config: Config, store: RunStore, runner: RunStarter) {
     store.create({ id: runId, prompt, source: "claudestra" });
     store.append(runId, {
       type: "run.started",
-      data: { prompt, source: "claudestra", authMode: config.authMode, budgetUsd: config.runBudgetUsd },
+      data: { prompt, source: "claudestra", authMode: config.authMode, budgetUsd: config.runBudgetUsd, agents: agents.infos() },
     });
     runner.start(runId, prompt).catch((err: unknown) => {
       const error = err instanceof Error ? err.message : String(err);
@@ -107,12 +109,12 @@ export function createApp(config: Config, store: RunStore, runner: RunStarter) {
     const sessionId = typeof payload.session_id === "string" ? payload.session_id : "unknown-session";
     const runId = `obs-${sessionId}`;
 
-    if (!store.has(runId) || store.status(runId) !== "running") {
-      if (store.has(runId) && event !== "SessionStart") return c.json({ ok: true, ignored: true });
+    // Observer runs are view-only: events keep being recorded even after SessionEnd or a server restart.
+    if (!store.has(runId)) {
       const cwd = typeof payload.cwd === "string" ? payload.cwd : "";
       const label = `Claude Code session${cwd ? ` · ${cwd}` : ""}`;
       store.create({ id: runId, prompt: label, source: "observer" });
-      store.append(runId, { type: "run.started", data: { prompt: label, source: "observer", authMode: "observer", budgetUsd: null } });
+      store.append(runId, { type: "run.started", data: { prompt: label, source: "observer", authMode: "observer", budgetUsd: null, agents: [] } });
       store.append(runId, { type: "step.started", data: { task: label, model: "claude-code", tools: [] } }, { stepId: "s1", agentId: "claude-code" });
       observers.set(runId, new HookEventMapper());
     }

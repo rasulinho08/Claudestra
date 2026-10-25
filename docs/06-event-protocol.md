@@ -36,7 +36,7 @@ type ClaudestraEvent = {
 | type | data |
 |---|---|
 | `ceo.thinking` | `{ mode: "plan"\|"review"\|"decide"\|"finalize", text }` (streamed deltas) |
-| `plan.created` | `{ plan: Plan }` → UI draws all nodes as `pending` |
+| `plan.created` | `{ plan: { route: "direct"\|"single_agent"\|"team", summary, steps } }` → UI draws all nodes as `pending` (plus a `final` CEO node for team plans) |
 | `plan.updated` | `{ plan: Plan, reason }` (insert/remove steps, re-plan) |
 | `plan.approval_requested` / `plan.approved` / `plan.rejected` | `{}` |
 
@@ -52,7 +52,8 @@ type ClaudestraEvent = {
 | `step.approval_requested` | `{ action, tool, input, reason }` |
 | `step.approved` / `step.rejected` | `{ by }` |
 | `step.succeeded` | `{ summary, artifactIds, usage, costUsd, durationMs }` |
-| `step.failed` | `{ error, retryable }` |
+| `step.failed` | `{ error }` |
+| `step.skipped` | `{ reason }`: an input step failed or the run budget ran out |
 | `step.retrying` | `{ attempt, reason }` |
 
 ### Tools, skills, artifacts
@@ -62,13 +63,13 @@ type ClaudestraEvent = {
 | `tool.result` | `{ callId, ok, output (truncated), outputRef? }` |
 | `tool.denied` | `{ tool, reason }`: the permission policy refused a call (sandbox, disabled tool) |
 | `skill.loaded` | `{ name }` |
-| `artifact.created` | `{ id, kind, title, path?, bytes }` |
+| `artifact.created` | `{ id, title, path, bytes }` (Phase 1: each step's full report) |
 | `file.changed` | `{ path, op: "create"\|"modify"\|"delete", diffRef? }` |
 
 ### Usage
 | type | data |
 |---|---|
-| `usage.updated` | `{ stepId?, inputTokens, outputTokens, cacheRead, costUsd, runTotalUsd }` |
+| `usage.updated` | `{ inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, costUsd, runCostUsd }` (step-scoped; `costUsd` is the step cost once known) |
 | `budget.warning` / `budget.exceeded` | `{ spentUsd, limitUsd }` |
 
 ## Mapping SDK messages → events (Agent Runner)
@@ -83,6 +84,9 @@ type ClaudestraEvent = {
 | `result` | `step.succeeded` / `step.failed` + `usage.updated` |
 | Hook `PreToolUse` | permission decision → maybe `step.approval_requested` |
 | Hook `PostToolUse` on Write/Edit | `file.changed` |
+
+Step ids: `ceo` (planning), `final` (CEO final answer), and the plan's own ids (`s1`, `s2`, ...).
+On `run.cancelled` / `run.failed` the server records nothing further; the UI closes open steps itself.
 
 Because each step is its own `query()`, attribution is trivial (no need to infer from `parent_tool_use_id`).
 If an agent uses SDK subagents internally, their events are nested under the step using that field.

@@ -31,6 +31,10 @@ artifacts(id PK, run_id FK, step_id FK, kind, title, path NULL, content NULL, by
 approvals(id PK, run_id FK, step_id FK, kind, request JSON, decision NULL, decided_at NULL, note)
 ```
 
+## Implemented in Phase 1
+`runs`, `steps`, `events`, `artifacts` exist (see `apps/server/src/store.ts`); agents are read from `agents/*.md`
+instead of a table, and settings come from `.env`. The remaining tables arrive with their phases.
+
 ## Notes
 - `events` is the source of truth; `runs`/`steps` are projections kept for fast lists and filters.
 - Large content (tool outputs, diffs, files) lives on disk under `workspaces/<runId>/` or in `artifacts.path`; DB rows hold references.

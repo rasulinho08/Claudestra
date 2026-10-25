@@ -5,11 +5,13 @@
 - Also: a minimal `/hooks/:event` endpoint for observer mode.
 - **Done when:** you see messages and tool calls appear live, with token cost.
 
-## Phase 1 — Core loop (week 1)
+## Phase 1 — Core loop (week 1) ✅ done
 - Monorepo, shared protocol package, SQLite, event bus, SSE.
 - CEO `plan` → 3 agents (Researcher, Coder, Reviewer) → CEO `finalize`.
 - React Flow canvas: nodes, statuses, edges, inspector "Live" tab.
 - **Done when:** a prompt produces a plan graph, nodes light up in order, answer appears, cost shown.
+- Shipped extras: CEO router (`direct | single_agent | team`), parallel steps, run budget with skip + warning,
+  per-step reports saved as artifacts, auto layout that picks horizontal or vertical to fit the screen.
 
 ## Phase 2 — Full roster & control (week 2)
 - All 10 agents, agent definition files, Agents screen.

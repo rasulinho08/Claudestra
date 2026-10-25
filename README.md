@@ -4,11 +4,11 @@
 routes work between them, and streams every step to a live graph UI. Built on the Claude Agent SDK.
 Local first, deploy later.
 
-> Status: **Phase 0 done**: one agent streamed live to a web page, plus observer mode. Next: Phase 1 (docs/10).
+> Status: **Phase 1 done**: CEO plans, a team of agents runs on a live graph, runs are stored in SQLite and can be replayed. Next: Phase 2 (docs/10).
 
 ## Run it locally
 
-Requirements: Node 22+, and either Claude Code logged in (`npm i -g @anthropic-ai/claude-code`, then run `claude` once
+Requirements: Node 22.13+ (uses the built-in `node:sqlite`), and either Claude Code logged in (`npm i -g @anthropic-ai/claude-code`, then run `claude` once
 and sign in) or an Anthropic API key.
 
 ```bash
@@ -17,14 +17,22 @@ cp .env.example .env      # pick AUTH_MODE; default is claude_cli_login
 npm run dev               # server http://127.0.0.1:8787 + web http://127.0.0.1:5173
 ```
 
-Open http://127.0.0.1:5173, type a prompt and watch messages, tool calls, tokens and cost stream in.
-Each run gets its own folder under `workspaces/`; the Phase 0 agent can only read and write inside it
-(tools: Read, Write, Edit, Glob, Grep, WebSearch, WebFetch; no shell).
+Open http://127.0.0.1:5173 and give the company a task:
+
+1. The **CEO** decides the route: answer directly (one cheap call), one specialist, or a team plan.
+2. The plan appears as a graph; nodes light up while their agent works, edges animate on handoffs.
+3. Click a node to watch that agent live (messages, tool calls, cost); click an edge to see what was handed over.
+4. The **Answer** tab shows the CEO's final answer, total cost and duration.
+
+Phase 1 team: CEO, Researcher, Coder, Reviewer (`agents/*.md`; edit prompts, tools, limits and model class there).
+Each run gets its own folder under `workspaces/`; agents can only read and write inside it, and each agent's full
+report is saved to `workspaces/<run>/.claudestra/reports/`. No shell yet (approval gates come in Phase 2).
+Runs and their events are stored in `data/claudestra.db`, so any past run can be reopened and replayed.
 
 | Command | What it does |
 |---|---|
 | `npm run dev` | Server + web with reload |
-| `npm test` | Server tests (mappers, sandbox, auth, SSE, hooks) |
+| `npm test` | Server tests (orchestrator, plan validation, store, SSE, hooks) and web reducer tests |
 | `npm run typecheck` | TypeScript across all packages |
 | `npm run build` | Production build of the web app |
 
@@ -37,8 +45,9 @@ Each Claude Code session appears as a run in the left list. Set `AUTH_MODE=obser
 ## Layout
 
 ```
-apps/server        Hono API, SSE, Agent SDK runner, observer hooks   (src/, test/, bin/claudestra-hook.mjs)
-apps/web           React page: run list, live timeline, cost header
+agents/            Agent definitions (YAML frontmatter + system prompt)
+apps/server        Hono API, SSE, orchestrator, SDK sessions, SQLite store, observer hooks
+apps/web           React Flow canvas, inspector, run list, cost header
 packages/protocol  Zod event schemas shared by server and web
 docs/              Design docs (source of truth)
 ```
