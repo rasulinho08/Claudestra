@@ -44,7 +44,8 @@ Production-style: `npm run build && npm start` serves the app and API together o
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Server + web with reload |
+| `npm run dev` | Server + web (web hot-reloads; server without auto-reload, reliable on Windows) |
+| `npm run dev:watch` | Same, with server auto-reload for development (may hang on Windows) |
 | `npm test` | Server tests (orchestrator, approvals, loops, workflows, store, SSE, hooks) and web tests (reducer, graph, stage) |
 | `npm run typecheck` | TypeScript across all packages |
 | `npm run build` | Production build of the web app |

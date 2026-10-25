@@ -101,7 +101,8 @@ you to **Authorize**: no email code is needed. Click it and return to cmd.
 |---|---|
 | `node:sqlite` / `ERR_UNKNOWN_BUILTIN_MODULE` | Node is older than 22.13: install a newer Node |
 | `ECONNREFUSED 127.0.0.1:8787` / "Server is not reachable" | The server did not start: read the `[server]` lines or run `npm run doctor` |
-| Nothing after `[server] > tsx watch …` for a long time | First start after `npm install` can be slow while antivirus scans `node_modules`; wait, or run `npm run doctor` |
+| Server stops after `loaded …\.env` with `tsx watch` | Known Windows issue with tsx's watch mode: `npm run dev` therefore runs the server without auto-reload. `npm run dev:watch` (auto-reload for development) may hang on Windows |
+| Nothing after `[server] > tsx …` for a long time | First start after `npm install` can be slow while antivirus scans `node_modules`; wait, or run `npm run doctor` |
 | Runs fail with an authentication error | Run `claude` once in cmd and log in again, or switch to `AUTH_MODE=api_key` |
 | Port already in use | Close the other `npm run dev`, or set `PORT=8788` in `.env` (then the web app needs `set CLAUDESTRA_URL=http://127.0.0.1:8788` before `npm run dev`) |
 | Agents cannot run shell commands | Install Git for Windows, then restart cmd |
