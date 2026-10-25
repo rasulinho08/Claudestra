@@ -4,7 +4,7 @@
 routes work between them, and streams every step to a live graph UI. Built on the Claude Agent SDK.
 Local first, deploy later.
 
-> Status: **Phase 1 done**: CEO plans, a team of agents runs on a live graph, runs are stored in SQLite and can be replayed. Next: Phase 2 (docs/10).
+> Status: **Phases 0–5 implemented**: 11-agent company, approval modes, coder⇄reviewer loops, skills, MCP apps, workflows, replay, cost analytics, and the animated robot **Stage** for a second monitor or OBS.
 
 ## Run it locally
 
@@ -19,22 +19,33 @@ npm run dev               # server http://127.0.0.1:8787 + web http://127.0.0.1:
 
 Open http://127.0.0.1:5173 and give the company a task:
 
-1. The **CEO** decides the route: answer directly (one cheap call), one specialist, or a team plan.
-2. The plan appears as a graph; nodes light up while their agent works, edges animate on handoffs.
-3. Click a node to watch that agent live (messages, tool calls, cost); click an edge to see what was handed over.
-4. The **Answer** tab shows the CEO's final answer, total cost and duration.
+1. Pick an **approval mode** (Manual / Smart / Auto) and a **cost profile** (eco / balanced / max) next to the prompt.
+2. The **CEO** decides the route: answer directly (one cheap call), one specialist, or a team plan.
+3. The plan appears as a graph; nodes light up while their agent works, edges animate on handoffs.
+   Switch to **Stage** to watch the Strativu robot carry the work between desks (doc 13).
+4. Risky actions (shell commands outside a safe list, installs, `rm`, app write tools) wait in an approval bar.
+5. Verifiers (reviewer, tester, security) can send the coder back for fixes; failed steps get a CEO review
+   (retry / continue / stop). Pause, resume and stop any time.
+6. The **Answer** tab shows the final answer and cost; **Files** shows the workspace; **Replay** re-watches a run
+   for free; **Save as workflow** turns a good run into a reusable template.
 
-Phase 1 team: CEO, Researcher, Coder, Reviewer (`agents/*.md`; edit prompts, tools, limits and model class there).
-Each run gets its own folder under `workspaces/`; agents can only read and write inside it, and each agent's full
-report is saved to `workspaces/<run>/.claudestra/reports/`. No shell yet (approval gates come in Phase 2).
-Runs and their events are stored in `data/claudestra.db`, so any past run can be reopened and replayed.
+Team (`agents/*.md`): CEO, Researcher, Business Analyst, Architect, Coder, Reviewer, Tester, Security Checker,
+Doc Writer, Data Analyst, Project Manager. Edit them in the **Agents** page or the files. Skills live in
+`skills/`, apps (MCP servers) in `integrations.json` (copy `integrations.example.json`; secrets come from `.env`).
+Each run gets its own folder under `workspaces/`; file tools are confined to it and Bash runs there (inside the
+OS sandbox on Linux/macOS). Runs, events, approvals and workflows are stored in `data/claudestra.db`.
+
+Pages: **Runs** · **Workflows** · **Agents** · **Skills** · **Apps** · **Costs** · **▶ Stage window**.
+
+Production-style: `npm run build && npm start` serves the app and API together on http://127.0.0.1:8787.
 
 | Command | What it does |
 |---|---|
 | `npm run dev` | Server + web with reload |
-| `npm test` | Server tests (orchestrator, plan validation, store, SSE, hooks) and web reducer tests |
+| `npm test` | Server tests (orchestrator, approvals, loops, workflows, store, SSE, hooks) and web tests (reducer, graph, stage) |
 | `npm run typecheck` | TypeScript across all packages |
 | `npm run build` | Production build of the web app |
+| `npm start` | Server only; also serves the built web app on :8787 |
 
 ### Observer mode (watch your normal Claude Code sessions)
 Keep Claudestra running and add hooks to the project's `.claude/settings.json` that call
@@ -46,8 +57,10 @@ Each Claude Code session appears as a run in the left list. Set `AUTH_MODE=obser
 
 ```
 agents/            Agent definitions (YAML frontmatter + system prompt)
+skills/            Skill library (one folder with SKILL.md per skill)
+integrations.example.json   MCP apps template (copy to integrations.json)
 apps/server        Hono API, SSE, orchestrator, SDK sessions, SQLite store, observer hooks
-apps/web           React Flow canvas, inspector, run list, cost header
+apps/web           React Flow canvas, robot stage, inspector, library pages, costs
 packages/protocol  Zod event schemas shared by server and web
 docs/              Design docs (source of truth)
 ```
@@ -78,6 +91,7 @@ docs/              Design docs (source of truth)
 | 10 | [Roadmap](docs/10-roadmap.md) | Phases, decisions made, open questions |
 | 11 | [Claude connection & cost](docs/11-claude-connection-and-cost.md) | API key vs subscription, cost optimisation |
 | 12 | [Local first & deploy](docs/12-local-first-and-deploy.md) | Local setup now, deploy checklist later |
+| 13 | [Stage & OBS](docs/13-stage-and-obs.md) | The animated robot view, second monitor and OBS setup |
 
 Reading order: 1 → 2 → 3 → agent specs → 6 → 7 → 11.
 

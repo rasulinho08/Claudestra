@@ -1,0 +1,24 @@
+{
+  "github": {
+    "description": "GitHub (official remote MCP server): search code, read files, issues and pull requests.",
+    "type": "http",
+    "url": "https://api.githubcopilot.com/mcp/",
+    "headers": { "Authorization": "Bearer ${GITHUB_TOKEN}" },
+    "readTools": ["search_code", "search_repositories", "get_file_contents", "list_issues", "get_issue", "list_pull_requests"]
+  },
+  "postgres": {
+    "description": "Read-only PostgreSQL access for the data analyst.",
+    "type": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"],
+    "readTools": ["query"]
+  },
+  "brave-search": {
+    "description": "Brave web search, an alternative to the built-in WebSearch.",
+    "type": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+    "env": { "BRAVE_API_KEY": "${BRAVE_API_KEY}" },
+    "readTools": ["brave_web_search"]
+  }
+}

@@ -3,16 +3,22 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "dev": "concurrently -n server,web -c blue,magenta \"npm run dev -w @claudestra/server\" \"npm run dev -w @claudestra/web\"",
     "build": "npm run build -w @claudestra/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "start": "npm run start -w @claudestra/server"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
     "typescript": "^5.9.3"
   },
-  "engines": { "node": ">=22.13" }
+  "engines": {
+    "node": ">=22.13"
+  }
 }

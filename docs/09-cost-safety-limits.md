@@ -28,6 +28,16 @@ Auto-approve mode (doc 4) removes prompts, not safeguards: sandbox, budgets, loo
 | Runaway loops | `maxIterations` on loops, `maxTurns`, run budget, wall-clock timeout |
 | Concurrent writes | One writer per workspace path; parallel coders use separate worktrees and merge step |
 
+## What smart mode lets through (implemented)
+- File tools only inside the run workspace (Read/Write/Edit paths are checked).
+- Bash commands on a safe list (ls, cat, grep, node/python **script files**, npm test/lint/build, git status/diff/add/commit, …)
+  with no absolute paths outside the workspace, no `..`, no `rm`, `curl`, `wget`, `sudo`, `ssh`, inline `node -e` / `python -c`.
+  Everything else asks. Agent files add their own `requiresApproval` patterns.
+- A script the agent wrote can still do anything the OS user can. On Linux/macOS Bash runs inside Claude Code's OS
+  sandbox (`OS_SANDBOX=auto`); **on Windows there is no OS sandbox**, so for untrusted tasks use **manual** mode or run
+  Claudestra in a VM / WSL / container. Docker per run is the planned deploy-time sandbox (doc 12).
+- Never-auto patterns (`NEVER_AUTO`, default: git push, rm -rf, sudo, MCP create/update/delete/push/merge) always ask, even in auto mode.
+
 ## Known limits (SDK & design)
 - **Flat subagents:** SDK subagents cannot spawn subagents. Our orchestrator provides the hierarchy instead.
 - **Auth/billing:** API key, pay per token (see doc 1).

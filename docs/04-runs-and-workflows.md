@@ -69,6 +69,10 @@ Even in `auto`, these hard limits are never bypassed: sandbox path confinement, 
 wall-clock timeout, and the secret-redaction pass. Actions outside the sandbox (e.g. pushing to a remote, MCP *write*
 tools on production systems) can be listed in `neverAuto` so they still prompt even in `auto`.
 
+Implemented: `DEFAULT_APPROVAL_MODE` in `.env`, per-run choice in the prompt box, "Approve for run" adds a
+run-wide rule for that tool (never for never-auto actions), and every automatic approval is logged as
+`step.approved` with `by: "auto"` or `by: "rule"`.
+
 ## Controls
 - **Pause / resume** (between steps; running steps finish first)
 - **Cancel** (aborts SDK sessions via abort controller)

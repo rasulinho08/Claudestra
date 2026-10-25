@@ -70,7 +70,7 @@ test("sandbox confines paths and tools", () => {
   assert.ok(!isInside("/w/run", "/etc/passwd"));
   assert.deepEqual(checkToolUse("/w/run", "Write", { file_path: "/w/run/x" }), { allow: true });
   assert.equal(checkToolUse("/w/run", "Write", { file_path: "/home/me/x" }).allow, false);
-  assert.equal(checkToolUse("/w/run", "Bash", { command: "ls" }).allow, false);
+  assert.equal(checkToolUse("/w/run", "NotebookEdit", { notebook_path: "x" }).allow, false);
 });
 
 test("auth modes", () => {

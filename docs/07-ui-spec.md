@@ -59,6 +59,11 @@ step failed, approval). Reading is identical to live mode.
 - **Workflows:** list, view as graph, edit JSON/form, run with parameters, "save from run".
 - **Runs:** history table (prompt, status, cost, duration, agents used), filter, open/replay.
 
+## Stage (robot view)
+An alternative to the canvas: the Strativu robot hops between agent desks, carries handoffs and reacts to
+approvals and completion. Switch with Graph / Stage, pop out with ↗, or open `#/stage?run=live` on a second
+monitor / as an OBS browser source. Details in [doc 13](13-stage-and-obs.md).
+
 ## Design principles
 - Calm, dense, dark-first; color = agent identity, brightness = activity.
 - Everything clickable leads to the raw data (no black boxes).

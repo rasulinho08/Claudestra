@@ -56,6 +56,19 @@ type ClaudestraEvent = {
 | `step.skipped` | `{ reason }`: an input step failed or the run budget ran out |
 | `step.retrying` | `{ attempt, reason }` |
 
+### Added in Phases 2–5
+| type | data |
+|---|---|
+| `run.paused` / `run.resumed` | `{ by }` |
+| `plan.approval_requested` / `plan.approved` / `plan.rejected` | `{ approvalId, by?, note? }` (manual mode) |
+| `ceo.review` | `{ stepId, action: "retry"\|"continue"\|"finish", note }` |
+| `step.added` | `{ id, agent, task, dependsOn, loopOf, iteration }` (verifier loop rounds) |
+| `step.retrying` | `{ attempt, reason, task }` |
+| `step.approved` | `{ approvalId, by: "user"\|"auto"\|"rule", scope: "once"\|"run", tool, reason }` |
+| `skill.loaded` | `{ name }` |
+
+`run.started` also carries `profile`, `approvalMode`, `mode` (`dynamic`/`workflow`) and `workflowId`.
+
 ### Tools, skills, artifacts
 | type | data |
 |---|---|

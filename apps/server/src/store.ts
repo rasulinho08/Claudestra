@@ -16,6 +16,10 @@ const RUN_TERMINAL: Partial<Record<ClaudestraEvent["type"], RunStatus>> = {
 const STEP_STATUS: Partial<Record<ClaudestraEvent["type"], StepStatus>> = {
   "step.ready": "ready",
   "step.started": "running",
+  "step.retrying": "running",
+  "step.approval_requested": "waiting_approval",
+  "step.approved": "running",
+  "step.rejected": "running",
   "step.succeeded": "succeeded",
   "step.failed": "failed",
   "step.skipped": "skipped",
@@ -53,6 +57,37 @@ CREATE TABLE IF NOT EXISTS events (
   data TEXT NOT NULL,
   PRIMARY KEY (run_id, seq)
 );
+CREATE TABLE IF NOT EXISTS approvals (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  step_id TEXT,
+  kind TEXT NOT NULL,
+  request TEXT NOT NULL,
+  decision TEXT,
+  decided_by TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  decided_at TEXT
+);
+CREATE TABLE IF NOT EXISTS workflows (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  params TEXT NOT NULL,
+  definition TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  source_run_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workflow_versions (
+  workflow_id TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  definition TEXT NOT NULL,
+  params TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (workflow_id, version)
+);
 CREATE TABLE IF NOT EXISTS artifacts (
   id TEXT PRIMARY KEY,
   run_id TEXT NOT NULL,
@@ -74,6 +109,33 @@ export class RunStore {
     this.db = new DatabaseSync(dbPath);
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec(SCHEMA);
+    this.migrate();
+  }
+
+  private migrate() {
+    const cols = (this.db.prepare("PRAGMA table_info(steps)").all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes("model")) this.db.exec("ALTER TABLE steps ADD COLUMN model TEXT");
+  }
+
+  // Raw access for the feature modules (workflows, analytics) that share this database.
+  get database(): DatabaseSync {
+    return this.db;
+  }
+
+  recordApproval(a: { id: string; runId: string; stepId: string | null; kind: "tool" | "plan"; request: unknown }) {
+    this.db
+      .prepare("INSERT INTO approvals (id, run_id, step_id, kind, request, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(a.id, a.runId, a.stepId, a.kind, JSON.stringify(a.request), new Date().toISOString());
+  }
+
+  decideApproval(id: string, decision: string, by: string, note: string) {
+    this.db.prepare("UPDATE approvals SET decision = ?, decided_by = ?, note = ?, decided_at = ? WHERE id = ?").run(decision, by, note, new Date().toISOString(), id);
+  }
+
+  // Spend across runs since an ISO timestamp (daily / monthly caps, docs/11 §2.3).
+  spentSince(iso: string): number {
+    const row = this.db.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS total FROM runs WHERE started_at >= ?").get(iso) as { total: number };
+    return row.total;
   }
 
   create(summary: Pick<RunSummary, "id" | "prompt" | "source">): RunSummary {
@@ -176,23 +238,28 @@ export class RunStore {
       this.db.prepare("UPDATE runs SET cost_usd = ? WHERE id = ?").run(event.data.totalCostUsd, event.runId);
     }
 
+    if (event.type === "usage.updated" && event.stepId && event.data.costUsd !== null) {
+      this.db.prepare("UPDATE steps SET cost_usd = ? WHERE run_id = ? AND step_id = ?").run(event.data.costUsd, event.runId, event.stepId);
+    }
     const stepStatus = STEP_STATUS[event.type];
     if (event.stepId && stepStatus) {
       const task = event.type === "step.ready" || event.type === "step.started" ? event.data.task : null;
       const cost = event.type === "step.succeeded" ? event.data.costUsd : null;
+      const model = event.type === "step.started" ? event.data.model : null;
       const terminal = ["succeeded", "failed", "skipped", "cancelled"].includes(stepStatus);
       this.db
         .prepare(
-          `INSERT INTO steps (run_id, step_id, agent_id, task, status, cost_usd, started_at, ended_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO steps (run_id, step_id, agent_id, task, status, cost_usd, started_at, ended_at, model)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (run_id, step_id) DO UPDATE SET
              status = excluded.status,
+             model = COALESCE(excluded.model, steps.model),
              task = COALESCE(excluded.task, steps.task),
              cost_usd = COALESCE(excluded.cost_usd, steps.cost_usd),
              started_at = COALESCE(steps.started_at, excluded.started_at),
              ended_at = COALESCE(excluded.ended_at, steps.ended_at)`,
         )
-        .run(event.runId, event.stepId, event.agentId ?? null, task, stepStatus, cost, stepStatus === "running" ? event.ts : null, terminal ? event.ts : null);
+        .run(event.runId, event.stepId, event.agentId ?? null, task, stepStatus, cost, event.type === "step.started" ? event.ts : null, terminal ? event.ts : null, model);
     }
   }
 }

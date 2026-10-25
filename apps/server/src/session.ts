@@ -1,9 +1,10 @@
 // Runs one agent as one Agent SDK session (docs/02 option B) and streams its events.
-import { query, type Options } from "@anthropic-ai/claude-agent-sdk";
+import { query, type McpServerConfig, type Options } from "@anthropic-ai/claude-agent-sdk";
 import type { EventData } from "@claudestra/protocol";
 import type { AgentDefinition } from "./agents.ts";
 import { SdkEventMapper, type SessionOutcome } from "./sdk-mapper.ts";
-import { checkToolUse } from "./sandbox.ts";
+
+export type Authorization = { allow: true } | { allow: false; reason: string };
 
 export type SessionRequest = {
   agent: AgentDefinition;
@@ -15,7 +16,12 @@ export type SessionRequest = {
   env: Record<string, string | undefined>;
   controller: AbortController;
   emit: (event: EventData) => void;
+  // Decides every tool call the SDK asks about (sandbox, allow-lists, approvals). May wait for the user.
+  authorize: (tool: string, input: Record<string, unknown>) => Promise<Authorization>;
   outputSchema?: Record<string, unknown>;
+  skills?: string[];
+  mcpServers?: Record<string, McpServerConfig>;
+  osSandbox?: boolean;
   claudeCodePath?: string;
 };
 
@@ -28,6 +34,7 @@ export type SessionRunner = (req: SessionRequest) => Promise<SessionOutcome>;
 
 export const runAgentSession: SessionRunner = async (req) => {
   const mapper = new SdkEventMapper(req.task);
+  const hasSkills = (req.skills?.length ?? 0) > 0;
   const options: Options = {
     cwd: req.workspace,
     model: req.model,
@@ -39,17 +46,21 @@ export const runAgentSession: SessionRunner = async (req) => {
     tools: req.agent.tools,
     // A custom prompt instead of the full Claude Code preset keeps every call small (docs/11 §2.4).
     systemPrompt: req.agent.info.id === "ceo" ? req.agent.systemPrompt : req.agent.systemPrompt + HANDOFF_RULE,
-    // Isolated from the owner's own Claude Code settings, hooks and plugins.
-    settingSources: [],
+    // Isolated from the owner's settings; "project" only to discover skills copied into the workspace.
+    settingSources: hasSkills ? ["project"] : [],
     permissionMode: "default",
     canUseTool: async (tool, input) => {
-      const allowed = req.agent.tools.includes(tool) ? checkToolUse(req.workspace, tool, input) : { allow: false as const, reason: `${tool} is not enabled for ${req.agent.info.name}` };
-      if (allowed.allow) return { behavior: "allow", updatedInput: input };
-      req.emit({ type: "tool.denied", data: { tool, reason: allowed.reason } });
-      return { behavior: "deny", message: allowed.reason };
+      const decision = await req.authorize(tool, input);
+      if (decision.allow) return { behavior: "allow", updatedInput: input };
+      return { behavior: "deny", message: decision.reason };
     },
     pathToClaudeCodeExecutable: req.claudeCodePath,
   };
+  if (hasSkills) options.skills = req.skills;
+  if (req.mcpServers && Object.keys(req.mcpServers).length > 0) options.mcpServers = req.mcpServers;
+  if (req.osSandbox && req.agent.tools.includes("Bash")) {
+    options.sandbox = { enabled: true, failIfUnavailable: false, autoAllowBashIfSandboxed: false };
+  }
   if (req.outputSchema) options.outputFormat = { type: "json_schema", schema: req.outputSchema };
 
   try {

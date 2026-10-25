@@ -20,13 +20,16 @@ function edgeList(run: RunView): Array<{ from: string; to: string }> {
   const edges: Array<{ from: string; to: string }> = [];
   const plan = run.plan;
   if (plan) {
-    const dependedOn = new Set(plan.steps.flatMap((s) => s.dependsOn));
-    for (const step of plan.steps) {
-      if (step.dependsOn.length === 0) edges.push({ from: CEO_PLAN_STEP, to: step.id });
-      for (const dep of step.dependsOn) edges.push({ from: dep, to: step.id });
+    // Plan steps plus steps added during the run (verifier loop iterations).
+    const deps = new Map<string, string[]>(plan.steps.map((s) => [s.id, s.dependsOn]));
+    for (const step of Object.values(run.steps)) if (step.dependsOn) deps.set(step.id, step.dependsOn);
+    const dependedOn = new Set([...deps.values()].flat());
+    for (const [id, ds] of deps) {
+      if (ds.length === 0) edges.push({ from: CEO_PLAN_STEP, to: id });
+      for (const dep of ds) edges.push({ from: dep, to: id });
     }
     if (run.steps[CEO_FINAL_STEP]) {
-      for (const step of plan.steps) if (!dependedOn.has(step.id)) edges.push({ from: step.id, to: CEO_FINAL_STEP });
+      for (const id of deps.keys()) if (!dependedOn.has(id)) edges.push({ from: id, to: CEO_FINAL_STEP });
     }
     return edges;
   }
@@ -82,7 +85,7 @@ export function buildGraph(run: RunView, selectedId: string | null, container?: 
   const edges: Edge[] = pairs.map(({ from, to }) => {
     const source = run.steps[from]!;
     const target = run.steps[to]!;
-    const flowing = target.status === "running" || (source.status === "succeeded" && target.status === "ready");
+    const flowing = target.status === "running" || target.status === "waiting_approval" || (source.status === "succeeded" && target.status === "ready");
     const done = source.status === "succeeded" && ["running", "succeeded"].includes(target.status);
     const color = done || flowing ? agentFor(run, source.agentId).color : "var(--edge)";
     return {

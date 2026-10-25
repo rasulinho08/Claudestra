@@ -11,6 +11,17 @@ export type RunSource = z.infer<typeof RunSource>;
 export const ModelClass = z.enum(["cheap", "mid", "strong"]);
 export type ModelClass = z.infer<typeof ModelClass>;
 
+// Cost profiles (docs/11 §2.2): model per class, plan-size cap and default run budget.
+export const Profile = z.enum(["eco", "balanced", "max"]);
+export type Profile = z.infer<typeof Profile>;
+
+// Approval modes (docs/04 "Approval modes").
+export const ApprovalMode = z.enum(["manual", "smart", "auto"]);
+export type ApprovalMode = z.infer<typeof ApprovalMode>;
+
+export const RunMode = z.enum(["dynamic", "workflow"]);
+export type RunMode = z.infer<typeof RunMode>;
+
 const Usage = z.object({
   inputTokens: z.number(),
   outputTokens: z.number(),
@@ -43,6 +54,8 @@ export const PlanStep = z.object({
   task: z.string().min(1),
   dependsOn: z.array(z.string()).default([]),
   successCriteria: z.string().default(""),
+  // For verifier steps (reviewer/tester/security): the step to send back for fixes when the verdict is CHANGES REQUESTED.
+  loopBackTo: z.string().default(""),
 });
 export type PlanStep = z.infer<typeof PlanStep>;
 
@@ -60,21 +73,49 @@ export type CeoDecision = z.infer<typeof CeoDecision>;
 export const Plan = z.object({
   route: Route,
   summary: z.string(),
-  steps: z.array(PlanStep.extend({ dependsOn: z.array(z.string()), successCriteria: z.string() })),
+  steps: z.array(PlanStep.extend({ dependsOn: z.array(z.string()), successCriteria: z.string(), loopBackTo: z.string() })),
 });
 export type Plan = z.infer<typeof Plan>;
+export type PlannedStep = Plan["steps"][number];
 
-export const StepStatus = z.enum(["pending", "ready", "running", "succeeded", "failed", "skipped", "cancelled"]);
+// CEO decision after a step failed (docs/03 "review").
+export const CeoReview = z.object({
+  action: z.enum(["retry", "continue", "finish"]),
+  revisedTask: z.string(),
+  note: z.string(),
+});
+export type CeoReview = z.infer<typeof CeoReview>;
+
+export const StepStatus = z.enum(["pending", "ready", "running", "waiting_approval", "succeeded", "failed", "skipped", "cancelled"]);
 export type StepStatus = z.infer<typeof StepStatus>;
 
 // Each event type with its payload.
 export const EventData = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("run.started"), data: z.object({ prompt: z.string(), source: RunSource, authMode: AuthMode, budgetUsd: z.number().nullable(), agents: z.array(AgentInfo).default([]) }) }),
+  z.object({
+    type: z.literal("run.started"),
+    data: z.object({
+      prompt: z.string(),
+      source: RunSource,
+      authMode: AuthMode,
+      budgetUsd: z.number().nullable(),
+      agents: z.array(AgentInfo).default([]),
+      profile: Profile.default("balanced"),
+      approvalMode: ApprovalMode.default("smart"),
+      mode: RunMode.default("dynamic"),
+      workflowId: z.string().optional(),
+    }),
+  }),
+  z.object({ type: z.literal("run.paused"), data: z.object({ by: z.string() }) }),
+  z.object({ type: z.literal("run.resumed"), data: z.object({ by: z.string() }) }),
   z.object({ type: z.literal("run.completed"), data: z.object({ answer: z.string(), totalCostUsd: z.number().nullable(), durationMs: z.number(), numTurns: z.number() }) }),
   z.object({ type: z.literal("run.failed"), data: z.object({ error: z.string() }) }),
   z.object({ type: z.literal("run.cancelled"), data: z.object({ by: z.string() }) }),
 
   z.object({ type: z.literal("plan.created"), data: z.object({ plan: Plan }) }),
+  z.object({ type: z.literal("plan.approval_requested"), data: z.object({ approvalId: z.string() }) }),
+  z.object({ type: z.literal("plan.approved"), data: z.object({ approvalId: z.string(), by: z.string() }) }),
+  z.object({ type: z.literal("plan.rejected"), data: z.object({ approvalId: z.string(), by: z.string(), note: z.string().default("") }) }),
+  z.object({ type: z.literal("ceo.review"), data: z.object({ stepId: z.string(), action: z.string(), note: z.string() }) }),
 
   z.object({ type: z.literal("step.ready"), data: z.object({ task: z.string() }) }),
   z.object({ type: z.literal("step.started"), data: z.object({ task: z.string(), model: z.string(), tools: z.array(z.string()), apiKeySource: z.string().optional() }) }),
@@ -86,6 +127,13 @@ export const EventData = z.discriminatedUnion("type", [
   z.object({ type: z.literal("step.failed"), data: z.object({ error: z.string() }) }),
   z.object({ type: z.literal("step.skipped"), data: z.object({ reason: z.string() }) }),
   z.object({ type: z.literal("step.cancelled"), data: z.object({}) }),
+  // A step created during the run (coder⇄reviewer loop iterations).
+  z.object({ type: z.literal("step.added"), data: z.object({ id: z.string(), agent: z.string(), task: z.string(), dependsOn: z.array(z.string()), loopOf: z.string(), iteration: z.number() }) }),
+  z.object({ type: z.literal("step.retrying"), data: z.object({ attempt: z.number(), reason: z.string(), task: z.string() }) }),
+  z.object({ type: z.literal("step.approval_requested"), data: z.object({ approvalId: z.string(), tool: z.string(), input: z.unknown(), reason: z.string() }) }),
+  z.object({ type: z.literal("step.approved"), data: z.object({ approvalId: z.string(), by: z.enum(["user", "auto", "rule"]), scope: z.enum(["once", "run"]).default("once"), tool: z.string().default(""), reason: z.string().default("") }) }),
+  z.object({ type: z.literal("step.rejected"), data: z.object({ approvalId: z.string(), by: z.string(), note: z.string().default("") }) }),
+  z.object({ type: z.literal("skill.loaded"), data: z.object({ name: z.string() }) }),
 
   z.object({ type: z.literal("tool.called"), data: z.object({ callId: z.string(), tool: z.string(), input: z.unknown() }) }),
   z.object({ type: z.literal("tool.result"), data: z.object({ callId: z.string(), ok: z.boolean(), output: z.string(), truncated: z.boolean() }) }),
@@ -124,18 +172,33 @@ export type RunSummary = {
 };
 
 export const CreateRunRequest = z.object({
-  prompt: z.string().trim().min(1).max(20_000),
+  prompt: z.string().trim().max(20_000).default(""),
+  profile: Profile.optional(),
+  approvalMode: ApprovalMode.optional(),
+  workflowId: z.string().optional(),
+  params: z.record(z.string(), z.string()).default({}),
 });
 export type CreateRunRequest = z.infer<typeof CreateRunRequest>;
+
+export type ProfileInfo = { models: Record<ModelClass, string>; planSizeCap: number; budgetUsd: number };
 
 export type HealthResponse = {
   ok: true;
   authMode: AuthMode;
   canStartRuns: boolean;
   models: Record<ModelClass, string>;
+  profiles: Record<Profile, ProfileInfo>;
+  defaultProfile: Profile;
+  defaultApprovalMode: ApprovalMode;
   agents: AgentInfo[];
   warning?: string;
 };
+
+export const ApprovalDecision = z.object({
+  decision: z.enum(["approve", "approve_run", "reject"]),
+  note: z.string().max(2000).default(""),
+});
+export type ApprovalDecision = z.infer<typeof ApprovalDecision>;
 
 // Max characters of a tool output kept in an event; full outputs become artifacts later (doc 6).
 export const TOOL_OUTPUT_LIMIT = 4_000;

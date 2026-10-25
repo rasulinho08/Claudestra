@@ -2,8 +2,8 @@
 // file writes only inside it, everything else denied (docs/09 "Safety").
 import path from "node:path";
 
-// Tools any agent may be granted in Phase 1; shell and MCP arrive with approval gates (Phase 2–3).
-export const ALLOWED_TOOLS = ["Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch"];
+// Built-in tools an agent may be granted; MCP tools are governed by integrations (approvals.ts).
+export const ALLOWED_TOOLS = ["Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch", "Bash"];
 
 const PATH_KEYS = ["file_path", "path", "notebook_path"];
 

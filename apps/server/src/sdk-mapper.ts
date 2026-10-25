@@ -83,6 +83,11 @@ export class SdkEventMapper {
             out.push({ type: "step.thinking", data: { messageId: message.id, text: block.thinking } });
           } else if (block.type === "tool_use" || block.type === "server_tool_use" || block.type === "mcp_tool_use") {
             out.push({ type: "tool.called", data: { callId: String(block.id), tool: String(block.name), input: block.input } });
+            if (block.name === "Skill") {
+              const input = (block.input ?? {}) as Record<string, unknown>;
+              const name = input.skill ?? input.name ?? input.command;
+              if (typeof name === "string") out.push({ type: "skill.loaded", data: { name } });
+            }
           }
         }
         if (message.usage) {

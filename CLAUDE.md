@@ -3,11 +3,13 @@
 This repo is **documentation-first**. The docs in `docs/` are the source of truth; implement them, do not redesign them.
 
 ## Current state
-Phases 0 and 1 are implemented. Run `npm test` and `npm run typecheck` before and after changes.
-Key files: `apps/server/src/orchestrator.ts` (run lifecycle), `session.ts` (one SDK session per step),
-`plan.ts` (CEO prompts + plan validation), `store.ts` (SQLite), `apps/web/src/run-state.ts` (event reducer),
-`graph.ts` + `Canvas.tsx` (React Flow). Next is Phase 2: full roster, coder⇄reviewer loop, CEO review, retries,
-approval modes, pause.
+Phases 0–5 are implemented (see docs/10 "Implementation notes"). Run `npm test` and `npm run typecheck` before
+and after changes.
+Server: `orchestrator.ts` (run lifecycle, approvals, pause, loops, reviews), `session.ts` (one SDK session per step),
+`approvals.ts` (policy), `plan.ts` (CEO prompts, validation), `store.ts` (SQLite), `workflows.ts`, `skills.ts`,
+`integrations.ts`, `analytics.ts`, `app.ts` (HTTP). Web: `run-state.ts` (event reducer), `RunsPage.tsx`,
+`graph.ts` + `Canvas.tsx` (React Flow), `stage/` (robot view: `world.ts` logic, `draw.ts` rendering), `pages/`.
+Open items are listed under Phase 5 in docs/10.
 
 ## Order of work
 1. Read `README.md`, then docs 1, 2, 3, 6, 7, 11 and `docs/agents/`.

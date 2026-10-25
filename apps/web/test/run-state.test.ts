@@ -12,8 +12,8 @@ const plan = {
   route: "team" as const,
   summary: "s",
   steps: [
-    { id: "s1", agent: "researcher", task: "find", dependsOn: [], successCriteria: "" },
-    { id: "s2", agent: "coder", task: "build", dependsOn: ["s1"], successCriteria: "" },
+    { id: "s1", agent: "researcher", task: "find", dependsOn: [], successCriteria: "", loopBackTo: "" },
+    { id: "s2", agent: "coder", task: "build", dependsOn: ["s1"], successCriteria: "", loopBackTo: "" },
   ],
 };
 
@@ -65,4 +65,25 @@ test("cancel closes running and pending steps; old seqs are ignored", () => {
   assert.equal(run.steps.s2?.status, "cancelled");
   assert.equal(run.status, "cancelled");
   assert.equal(reduceRun(run, started), run);
+});
+
+test("loop steps get their own nodes and edges; approvals move in and out of pending", () => {
+  seq = 0;
+  let run = play([
+    ev({ type: "run.started", data: { prompt: "p", source: "claudestra", authMode: "api_key", budgetUsd: 1, agents: [] } }),
+    ev({ type: "plan.created", data: { plan } }),
+    ev({ type: "step.added", data: { id: "s1-r2", agent: "researcher", task: "fix", dependsOn: ["s2"], loopOf: "s1", iteration: 2 } }, "s1-r2", "researcher"),
+    ev({ type: "step.approval_requested", data: { approvalId: "a1", tool: "Bash", input: { command: "rm x" }, reason: "risky" } }, "s2", "coder"),
+  ]);
+  assert.equal(run.pending.length, 1);
+  assert.equal(run.steps.s2?.status, "waiting_approval");
+  const ids = buildGraph(run, null).edges.map((e) => e.id);
+  assert.ok(ids.includes("s2->s1-r2"));
+  assert.ok(ids.includes("s1-r2->final"));
+  assert.ok(!ids.includes("s2->final"));
+  run = reduceRun(run, ev({ type: "step.approved", data: { approvalId: "a1", by: "user", scope: "once" } }, "s2", "coder"));
+  assert.equal(run.pending.length, 0);
+  assert.equal(run.steps.s2?.status, "running");
+  const item = run.steps.s2!.items.find((i) => i.kind === "approval");
+  assert.ok(item?.kind === "approval" && item.state === "approved");
 });

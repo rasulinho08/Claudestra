@@ -1,12 +1,21 @@
 // CEO planning: prompt building, decision parsing and plan validation (docs/03 "CEO behaviour").
 import { z } from "zod";
-import { CEO_FINAL_STEP, CEO_PLAN_STEP, CeoDecision, type Plan } from "@claudestra/protocol";
+import { CEO_FINAL_STEP, CEO_PLAN_STEP, CeoDecision, CeoReview, type Plan, type PlannedStep } from "@claudestra/protocol";
 import type { AgentDefinition } from "./agents.ts";
 
 // JSON schema the SDK enforces on the CEO's planning reply. The CLI's validator does not know
 // the draft 2020-12 meta-schema URL, so the "$schema" key is dropped.
 const { $schema: _meta, ...decisionSchema } = z.toJSONSchema(CeoDecision, { target: "draft-7" }) as Record<string, unknown>;
 export const ceoDecisionSchema: Record<string, unknown> = decisionSchema;
+const { $schema: _reviewMeta, ...reviewSchema } = z.toJSONSchema(CeoReview, { target: "draft-7" }) as Record<string, unknown>;
+export const ceoReviewSchema: Record<string, unknown> = reviewSchema;
+
+// Verifier reports start with "VERDICT: APPROVE" or "VERDICT: CHANGES REQUESTED" (agents/reviewer.md).
+export function verdictOf(report: string): "approve" | "changes" | "unknown" {
+  const m = /VERDICT:\s*\**\s*(APPROVE|CHANGES REQUESTED)/i.exec(report);
+  if (m) return m[1]!.toUpperCase() === "APPROVE" ? "approve" : "changes";
+  return /CHANGES REQUESTED/i.test(report) ? "changes" : "unknown";
+}
 
 export function buildPlanningPrompt(request: string, roster: AgentDefinition[], planSizeCap: number, budgetUsd: number): string {
   const agents = roster
@@ -17,7 +26,7 @@ export function buildPlanningPrompt(request: string, roster: AgentDefinition[], 
 Roster (the only agents you may use):
 ${agents}
 
-Limits: at most ${planSizeCap} steps; run budget $${budgetUsd.toFixed(2)}.
+Limits: at most ${planSizeCap} steps; run budget $${budgetUsd.toFixed(2)}. Cheaper agents and fewer steps are better when they are enough.
 
 Client request:
 <request>
@@ -48,6 +57,27 @@ ${body}
 Write the final answer for the client.`;
 }
 
+export function buildReviewPrompt(request: string, plan: Plan, step: PlannedStep, error: string, attempts: number, remainingUsd: number): string {
+  return `MODE: REVIEWING
+
+Client request:
+<request>
+${request}
+</request>
+
+Plan summary: ${plan.summary}
+Failed step ${step.id} (${step.agent}), attempt ${attempts}: ${step.task}
+Error: ${error.slice(0, 1500)}
+Budget left: $${remainingUsd.toFixed(2)}
+
+Decide what to do with this failure. Return JSON matching the schema.`;
+}
+
+// Fills {{name}} placeholders of a saved workflow (docs/04 "Workflow").
+export function fillTemplate(text: string, params: Record<string, string>): string {
+  return text.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (whole, key: string) => params[key] ?? whole);
+}
+
 // Pulls the JSON decision out of a reply when structured output is unavailable.
 export function extractJson(text: string): unknown {
   const start = text.indexOf("{");
@@ -63,14 +93,14 @@ export function validatePlan(raw: unknown, roster: AgentDefinition[], planSizeCa
     return { route: "direct", summary: decision.summary, steps: [] };
   }
   const known = new Set(roster.map((a) => a.info.id));
-  const steps = decision.steps.map((s) => ({ ...s, dependsOn: [...new Set(s.dependsOn)], successCriteria: s.successCriteria }));
+  const steps = decision.steps.map((s) => ({ ...s, dependsOn: [...new Set(s.dependsOn)] }));
   if (steps.length === 0) throw new Error(`${decision.route} route without steps`);
   if (steps.length > planSizeCap) throw new Error(`plan has ${steps.length} steps; the cap is ${planSizeCap}`);
   if (decision.route === "single_agent" && steps.length !== 1) throw new Error("single_agent route must have exactly one step");
 
   const ids = new Set<string>();
   for (const step of steps) {
-    if (step.id === CEO_PLAN_STEP || step.id === CEO_FINAL_STEP) throw new Error(`step id "${step.id}" is reserved`);
+    if (step.id === CEO_PLAN_STEP || step.id === CEO_FINAL_STEP || /-r\d+$/.test(step.id)) throw new Error(`step id "${step.id}" is reserved`);
     if (ids.has(step.id)) throw new Error(`duplicate step id "${step.id}"`);
     if (!known.has(step.agent)) throw new Error(`step ${step.id} uses unknown agent "${step.agent}"`);
     ids.add(step.id);
@@ -82,7 +112,21 @@ export function validatePlan(raw: unknown, roster: AgentDefinition[], planSizeCa
     }
   }
   assertAcyclic(steps);
+  for (const step of steps) {
+    if (!step.loopBackTo) continue;
+    if (!ancestors(steps, step.id).has(step.loopBackTo)) throw new Error(`step ${step.id} loops back to ${step.loopBackTo}, which it does not depend on`);
+  }
   return { route: decision.route, summary: decision.summary, steps };
+}
+
+function ancestors(steps: { id: string; dependsOn: string[] }[], id: string): Set<string> {
+  const deps = new Map(steps.map((s) => [s.id, s.dependsOn]));
+  const seen = new Set<string>();
+  const walk = (x: string) => {
+    for (const d of deps.get(x) ?? []) if (!seen.has(d)) (seen.add(d), walk(d));
+  };
+  walk(id);
+  return seen;
 }
 
 function assertAcyclic(steps: { id: string; dependsOn: string[] }[]) {
