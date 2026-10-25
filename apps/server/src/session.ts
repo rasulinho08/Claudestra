@@ -2,7 +2,7 @@
 import { query, type McpServerConfig, type Options } from "@anthropic-ai/claude-agent-sdk";
 import type { EventData } from "@claudestra/protocol";
 import type { AgentDefinition } from "./agents.ts";
-import { SdkEventMapper, type SessionOutcome } from "./sdk-mapper.ts";
+import { SdkEventMapper, explainError, type SessionOutcome } from "./sdk-mapper.ts";
 
 export type Authorization = { allow: true } | { allow: false; reason: string };
 
@@ -69,7 +69,7 @@ export const runAgentSession: SessionRunner = async (req) => {
     }
   } catch (err) {
     if (req.controller.signal.aborted) return { ok: false, text: "", costUsd: null, durationMs: 0, numTurns: 0, error: "cancelled" };
-    const error = err instanceof Error ? err.message : String(err);
+    const error = explainError(err instanceof Error ? err.message : String(err));
     req.emit({ type: "step.failed", data: { error } });
     return { ok: false, text: "", costUsd: mapper.outcome?.costUsd ?? null, durationMs: 0, numTurns: 0, error };
   }

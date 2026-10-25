@@ -5,6 +5,14 @@ import { emptyUsage, TOOL_OUTPUT_LIMIT, type EventData, type Usage } from "@clau
 
 type Block = { type: string; [key: string]: unknown };
 
+const AUTH_ERROR = /authenticat|oauth|invalid x-api-key|invalid api key|401|not logged in|credit balance/i;
+
+// Adds a concrete next step to authentication / billing errors (docs/14 "Claude login").
+export function explainError(error: string): string {
+  if (!AUTH_ERROR.test(error)) return error;
+  return `${error}\n\nFix: in cmd run \`claude\`, type /login and authorize in the browser (no restart needed), or set AUTH_MODE=api_key with ANTHROPIC_API_KEY in .env and restart.`;
+}
+
 export function truncate(text: string, limit = TOOL_OUTPUT_LIMIT): { output: string; truncated: boolean } {
   if (text.length <= limit) return { output: text, truncated: false };
   return { output: `${text.slice(0, limit)}\n… [${text.length - limit} more characters]`, truncated: true };
@@ -121,8 +129,9 @@ export class SdkEventMapper {
             { type: "step.succeeded", data: { summary: text.slice(0, 300), costUsd: msg.total_cost_usd, durationMs: msg.duration_ms } },
           ];
         }
-        const error =
-          "errors" in msg && msg.errors.length > 0 ? msg.errors.join("; ") : `${msg.subtype}${"result" in msg && msg.result ? `: ${msg.result}` : ""}`;
+        const error = explainError(
+          "errors" in msg && msg.errors.length > 0 ? msg.errors.join("; ") : `${msg.subtype}${"result" in msg && msg.result ? `: ${msg.result}` : ""}`,
+        );
         this.outcome = { ok: false, text: this.answer, costUsd: msg.total_cost_usd, durationMs: msg.duration_ms, numTurns: msg.num_turns, error };
         return [
           { type: "usage.updated", data: usage },

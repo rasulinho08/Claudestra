@@ -118,3 +118,9 @@ test("failInterrupted closes runs left running", () => {
   assert.equal(store.status("r1"), "failed");
   assert.equal(store.status("obs-1"), "running");
 });
+
+test("authentication errors get a concrete fix", async () => {
+  const { explainError } = await import("../src/sdk-mapper.ts");
+  assert.match(explainError("Failed to authenticate: OAuth session expired"), /\/login/);
+  assert.equal(explainError("boom"), "boom");
+});
