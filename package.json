@@ -13,7 +13,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "start": "npm run start -w @claudestra/server",
-    "user": "npm run user -w @claudestra/server --"
+    "user": "npm run user -w @claudestra/server --",
+    "doctor": "node scripts/doctor.mjs",
+    "server": "npm run start -w @claudestra/server"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

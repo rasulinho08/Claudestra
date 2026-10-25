@@ -1,9 +1,12 @@
 // Manage login users:  npm run user -- add NAME [owner|operator|viewer]  |  list  |  remove NAME
-import { loadConfig } from "../src/config.ts";
+import { existsSync } from "node:fs";
+import { loadConfig, repoRoot } from "../src/config.ts";
 import { RunStore } from "../src/store.ts";
 import { Access } from "../src/access.ts";
 import { Role } from "@claudestra/protocol";
 
+const envFile = `${repoRoot}/.env`;
+if (existsSync(envFile)) process.loadEnvFile(envFile);
 const [cmd, name, roleArg = "owner"] = process.argv.slice(2);
 const config = loadConfig();
 const access = new Access(new RunStore(config.dbPath), config.authToken);

@@ -61,10 +61,35 @@ npm install
 npm run dev
 ```
 
+## If something does not work: `npm run doctor`
+
+```cmd
+npm run doctor
+```
+It checks Node, `node:sqlite`, dependencies, `.env`, `AUTH_MODE`, the Claude Code CLI, Git, the port, and then tries to
+start the server for 25 seconds and prints its output. Every FAIL line says what to do.
+
+The server always prints `[claudestra] starting server…` and then one line per step. If the web app shows
+`ECONNREFUSED 127.0.0.1:8787`, look at the `[server]` lines in the same window: the last one says where it stopped.
+
+## Claude login without email access
+
+`claude` opens a browser page on claude.ai. If that browser is **already logged in to claude.ai**, the page only asks
+you to **Authorize**: no email code is needed. Click it and return to cmd.
+
+- Browser did not open: cmd shows a long URL; copy it into the browser where you are logged in to claude.ai.
+- The page asks for a code from your email: you are not logged in in that browser. Use the browser/profile where
+  claude.ai is open, or "Continue with Google" if your account uses Google.
+- No way to log in right now: use `AUTH_MODE=api_key` with a key from console.anthropic.com (that also needs a login),
+  or wait until you have email access.
+- Check: run `claude`; if it opens a chat prompt without asking to log in, you are logged in (type `/exit`).
+
 ## Useful commands
 
 | Command | What it does |
 |---|---|
+| `npm run doctor` | Checks the setup and tries a server start |
+| `npm run server` | Server only, no auto-reload (clearer output) |
 | `npm test` | Runs all tests (no Claude calls, free) |
 | `npm run typecheck` | TypeScript check |
 | `npm run user -- add NAME owner` | Turns on login and prints a token for NAME (roles: owner, operator, viewer) |
@@ -75,7 +100,8 @@ npm run dev
 | Problem | Fix |
 |---|---|
 | `node:sqlite` / `ERR_UNKNOWN_BUILTIN_MODULE` | Node is older than 22.13: install a newer Node |
-| "Server is not reachable on :8787" in the page | The server window shows the error; usually `.env` has a typo in `AUTH_MODE` |
+| `ECONNREFUSED 127.0.0.1:8787` / "Server is not reachable" | The server did not start: read the `[server]` lines or run `npm run doctor` |
+| Nothing after `[server] > tsx watch …` for a long time | First start after `npm install` can be slow while antivirus scans `node_modules`; wait, or run `npm run doctor` |
 | Runs fail with an authentication error | Run `claude` once in cmd and log in again, or switch to `AUTH_MODE=api_key` |
 | Port already in use | Close the other `npm run dev`, or set `PORT=8788` in `.env` (then the web app needs `set CLAUDESTRA_URL=http://127.0.0.1:8788` before `npm run dev`) |
 | Agents cannot run shell commands | Install Git for Windows, then restart cmd |

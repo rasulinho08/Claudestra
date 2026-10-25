@@ -17,9 +17,12 @@ import { RunLauncher } from "./runs.ts";
 import { Scheduler, TriggerStore } from "./triggers.ts";
 import { Evals } from "./evals.ts";
 
+const step = (msg: string) => console.log(`[claudestra] ${msg}`);
 const config = loadConfig();
+step(`opening database ${config.dbPath}`);
 const store = new RunStore(config.dbPath);
 const agents = AgentRegistry.fromDir(config.agentsDir);
+step(`loaded ${agents.infos().length} agents`);
 const skills = new SkillLibrary(config.skillsDir);
 const integrations = new IntegrationRegistry(config.integrationsFile);
 const workflows = new WorkflowStore(store);
@@ -51,7 +54,8 @@ if (existsSync(webDist)) {
   app.get("*", serveStatic({ path: path.relative(process.cwd(), path.join(webDist, "index.html")) }));
 }
 
-serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
+step(`listening on http://${config.host}:${config.port} …`);
+const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   const auth = resolveSdkAuth(config.authMode, process.env);
   const p = config.profiles[config.defaultProfile];
   console.log(`Claudestra server on http://${info.address}:${info.port}  (AUTH_MODE=${config.authMode})`);
@@ -64,4 +68,10 @@ serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => 
   if (interrupted > 0) console.log(`  closed ${interrupted} run(s) interrupted by the last shutdown`);
   if (!auth.ok) console.warn(`  runs disabled: ${auth.reason}`);
   else if (auth.warning) console.warn(`  note: ${auth.warning}`);
+});
+
+server.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EADDRINUSE") console.error(`[claudestra] port ${config.port} is already in use: close the other Claudestra window or set PORT in .env.`);
+  else console.error(`[claudestra] server error: ${err.message}`);
+  process.exit(1);
 });

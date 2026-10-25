@@ -6,7 +6,7 @@ Local first, deploy later.
 
 > Status: **all phases (0–5) implemented**: 11-agent company, approval modes, coder⇄reviewer loops, skills, MCP apps, workflows with a visual editor, triggers (schedule, webhook, GitHub), cross-run memory, login with roles, evals, templates, replay, cost analytics, and the animated robot **Stage** for a second monitor or OBS.
 
-**Windows:** step-by-step cmd instructions are in [docs/14-running-on-windows.md](docs/14-running-on-windows.md).
+**Windows:** step-by-step cmd instructions are in [docs/14-running-on-windows.md](docs/14-running-on-windows.md). Problems? `npm run doctor`.
 
 ## Run it locally
 
@@ -49,6 +49,7 @@ Production-style: `npm run build && npm start` serves the app and API together o
 | `npm run typecheck` | TypeScript across all packages |
 | `npm run build` | Production build of the web app |
 | `npm start` | Server only; also serves the built web app on :8787 |
+| `npm run doctor` | Checks Node, .env, Claude Code, port, and tries a server start |
 | `npm run user -- add NAME owner` | Turn on login and create a user token (roles: owner, operator, viewer) |
 
 ### Observer mode (watch your normal Claude Code sessions)
