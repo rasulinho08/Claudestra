@@ -2,6 +2,10 @@
 
 This repo is **documentation-first**. The docs in `docs/` are the source of truth; implement them, do not redesign them.
 
+## Current state
+Phase 0 is implemented (`apps/server`, `apps/web`, `packages/protocol`). Run `npm test` and `npm run typecheck` before
+and after changes. Next is Phase 1: SQLite persistence (replace `RunStore`), CEO plan → multiple agents, React Flow canvas.
+
 ## Order of work
 1. Read `README.md`, then docs 1, 2, 3, 6, 7, 11 and `docs/agents/`.
 2. Follow `docs/10-roadmap.md` phase by phase. Start with **Phase 0** (spike) and stop at each "Done when".

@@ -68,7 +68,7 @@ Option A remains available *inside* a step (an agent may use SDK subagents for i
 
 | Layer | Choice | Why |
 |---|---|---|
-| Runtime | Node 20+ / TypeScript | Agent SDK is first-class in TS |
+| Runtime | Node 22+ / TypeScript | Agent SDK is first-class in TS |
 | HTTP | Hono or Fastify | Light, SSE support |
 | Live transport | SSE (default), WebSocket later | One-way stream fits; simple reconnect via `Last-Event-ID` |
 | DB | SQLite (better-sqlite3 + Drizzle) | Zero ops, replay-friendly |

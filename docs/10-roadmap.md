@@ -1,6 +1,6 @@
 # 10. Roadmap
 
-## Phase 0 — Spike (1–2 days)
+## Phase 0 — Spike (1–2 days) ✅ done
 - One `query()` call streamed to a bare web page, with `AUTH_MODE=claude_cli_login`.
 - Also: a minimal `/hooks/:event` endpoint for observer mode.
 - **Done when:** you see messages and tool calls appear live, with token cost.

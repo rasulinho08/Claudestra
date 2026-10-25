@@ -45,7 +45,7 @@ type ClaudestraEvent = {
 |---|---|
 | `step.ready` | `{}` |
 | `step.started` | `{ task, model, tools, skills, integrations }` |
-| `step.message` | `{ role: "assistant", text, partial?: boolean }` |
+| `step.message` | `{ messageId, role: "assistant"\|"user"\|"system", text, partial }`; deltas share `messageId` with the final text |
 | `step.thinking` | `{ text }` (if extended thinking is surfaced) |
 | `step.handoff` | `{ from: stepId, to: stepId, summary, artifactIds }` → animated edge |
 | `step.needs_input` | `{ question, options? }` |
@@ -60,6 +60,7 @@ type ClaudestraEvent = {
 |---|---|
 | `tool.called` | `{ callId, tool, input, integration? }` |
 | `tool.result` | `{ callId, ok, output (truncated), outputRef? }` |
+| `tool.denied` | `{ tool, reason }`: the permission policy refused a call (sandbox, disabled tool) |
 | `skill.loaded` | `{ name }` |
 | `artifact.created` | `{ id, kind, title, path?, bytes }` |
 | `file.changed` | `{ path, op: "create"\|"modify"\|"delete", diffRef? }` |
@@ -85,6 +86,11 @@ type ClaudestraEvent = {
 
 Because each step is its own `query()`, attribution is trivial (no need to infer from `parent_tool_use_id`).
 If an agent uses SDK subagents internally, their events are nested under the step using that field.
+
+## Observer mode
+Claude Code hook payloads (`POST /hooks/:event`) are mapped to the same events: one run per `session_id`
+(`obs-<session_id>`), `UserPromptSubmit` → `step.message` (role user), `PreToolUse`/`PostToolUse` → `tool.called`/`tool.result`,
+`SessionEnd` → `run.completed`. Implemented in `apps/server/src/hook-mapper.ts`.
 
 ## Persistence & size
 - Tool outputs over N KB are truncated in the event and stored in full as an artifact (`outputRef`).

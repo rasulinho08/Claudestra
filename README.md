@@ -4,7 +4,44 @@
 routes work between them, and streams every step to a live graph UI. Built on the Claude Agent SDK.
 Local first, deploy later.
 
-> Status: **documentation only. No code yet.** Implementation is a separate step (see `CLAUDE.md`).
+> Status: **Phase 0 done**: one agent streamed live to a web page, plus observer mode. Next: Phase 1 (docs/10).
+
+## Run it locally
+
+Requirements: Node 22+, and either Claude Code logged in (`npm i -g @anthropic-ai/claude-code`, then run `claude` once
+and sign in) or an Anthropic API key.
+
+```bash
+npm install
+cp .env.example .env      # pick AUTH_MODE; default is claude_cli_login
+npm run dev               # server http://127.0.0.1:8787 + web http://127.0.0.1:5173
+```
+
+Open http://127.0.0.1:5173, type a prompt and watch messages, tool calls, tokens and cost stream in.
+Each run gets its own folder under `workspaces/`; the Phase 0 agent can only read and write inside it
+(tools: Read, Write, Edit, Glob, Grep, WebSearch, WebFetch; no shell).
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Server + web with reload |
+| `npm test` | Server tests (mappers, sandbox, auth, SSE, hooks) |
+| `npm run typecheck` | TypeScript across all packages |
+| `npm run build` | Production build of the web app |
+
+### Observer mode (watch your normal Claude Code sessions)
+Keep Claudestra running and add hooks to the project's `.claude/settings.json` that call
+`node <path-to-claudestra>/apps/server/bin/claudestra-hook.mjs <EventName>` for `SessionStart`, `UserPromptSubmit`,
+`PreToolUse`, `PostToolUse`, `SubagentStop`, `Stop` and `SessionEnd` (full snippet in docs/11 §1.1 C).
+Each Claude Code session appears as a run in the left list. Set `AUTH_MODE=observer` if you only want to watch.
+
+## Layout
+
+```
+apps/server        Hono API, SSE, Agent SDK runner, observer hooks   (src/, test/, bin/claudestra-hook.mjs)
+apps/web           React page: run list, live timeline, cost header
+packages/protocol  Zod event schemas shared by server and web
+docs/              Design docs (source of truth)
+```
 
 ## Highlights
 - CEO decides the smallest team per task (direct answer, one agent, or a full plan) to save tokens.

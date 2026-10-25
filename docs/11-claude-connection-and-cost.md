@@ -69,11 +69,12 @@ Claudestra, which draws the graph.
        "PreToolUse":       [{ "matcher": "*", "hooks": [{ "type": "command", "command": "claudestra-hook PreToolUse" }] }],
        "PostToolUse":      [{ "matcher": "*", "hooks": [{ "type": "command", "command": "claudestra-hook PostToolUse" }] }],
        "SubagentStop":     [{ "hooks": [{ "type": "command", "command": "claudestra-hook SubagentStop" }] }],
-       "Stop":             [{ "hooks": [{ "type": "command", "command": "claudestra-hook Stop" }] }]
+       "Stop":             [{ "hooks": [{ "type": "command", "command": "claudestra-hook Stop" }] }],
+       "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "claudestra-hook SessionEnd" }] }]
      }
    }
    ```
-   `claudestra-hook` is a tiny script that forwards the hook JSON from stdin to the local server and exits 0
+   `claudestra-hook` stands for `node <path-to-claudestra>/apps/server/bin/claudestra-hook.mjs`, a tiny script that forwards the hook JSON from stdin to the local server and exits 0
    immediately (it must never block or fail Claude Code).
 3. The server maps hook payloads to the normal event protocol (doc 6): subagents become nodes, tool calls appear on them.
 4. Limits: view-only (no pause/approve from the UI in v1), no CEO routing by Claudestra, flat subagent hierarchy.
