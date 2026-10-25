@@ -21,14 +21,69 @@ Short answer: **technically possible on your own machine, but not recommended as
   (5-hour / weekly limits) much faster** than normal chat, and you can get locked out mid-run.
 - With an API key you pay only for tokens used and there are no sudden lockouts. Cost is fully visible per step.
 
-**Decision:** auth is a pluggable setting, `AUTH_MODE=api_key` (default) or `AUTH_MODE=claude_cli_login`
-(local-only experiment; disabled when deployed). The UI always shows the cost the run *would* cost at API prices,
+**Decision:** auth is a pluggable setting: `AUTH_MODE=api_key` (default), `claude_cli_login` or `observer`
+(both local-only; disabled when deployed), plus `bedrock`/`vertex`. See 1.1. The UI always shows the cost the run *would* cost at API prices,
 even in subscription mode, so you can compare.
 
 Sources reviewed: [Anthropic bans third-party subscription authentication (Gigazine)](https://gigazine.net/gsc_news/en/20260220-anthropic-third-party-block),
 [WinBuzzer](https://winbuzzer.com/2026/02/19/anthropic-bans-claude-subscription-oauth-in-third-party-apps-xcxwbn/),
 [AlternativeTo](https://alternativeto.net/news/2026/2/anthropic-officially-bans-using-subscription-authentication-for-third-party-claude-use).
 These are secondary reports; **verify against Anthropic's current official documentation before relying on this.**
+
+### 1.1 Step by step: the four ways to connect
+
+MCP is **not** a way to connect Claude to Claudestra. MCP gives Claude *tools* (GitHub, Notion, ...). The connection to
+the model is always one of the four ways below.
+
+| # | Mode (`AUTH_MODE`) | Needs | Best for | Deploy? |
+|---|---|---|---|---|
+| A | `api_key` | API key + prepaid balance | Production, stable, officially supported | Yes |
+| B | `claude_cli_login` | Claude Code CLI logged in with your Claude account | Starting locally without an API key | No |
+| C | `observer` | Claude Code logged in; hooks send events to Claudestra | Watching your normal Claude Code sessions as a graph | No |
+| D | `bedrock` / `vertex` | Cloud credentials | Companies on AWS/GCP | Yes |
+
+**A. API key**
+1. Create an account at the Anthropic Console, add a small prepaid balance, and create an API key.
+2. Copy `.env.example` to `.env`, set `ANTHROPIC_API_KEY=...` and `AUTH_MODE=api_key`.
+3. This is billed separately from a Claude.ai subscription. You pay only for tokens used.
+
+**B. Claude login (local, no API key)**
+1. Install Claude Code: `npm install -g @anthropic-ai/claude-code`.
+2. Run `claude` once in a terminal and sign in with your Claude account (browser opens).
+3. In `.env` leave `ANTHROPIC_API_KEY` empty and set `AUTH_MODE=claude_cli_login`.
+4. Start Claudestra on the **same machine**. The SDK uses the stored Claude Code login.
+5. Caveats: counts against subscription usage limits (multi-agent runs consume them quickly), terms are a grey area
+   (section 1 above), and it must be disabled when deployed. Claudestra shows a warning banner in this mode.
+   Keep `eco` profile and low budgets here.
+
+**C. Observer mode (visualise your normal Claude Code)**
+Claudestra does not run the agents. You work in Claude Code as usual; Claude Code hooks post each event to
+Claudestra, which draws the graph.
+1. Claudestra exposes `POST http://127.0.0.1:8787/hooks/:event` (local only).
+2. A generated snippet is added to the project's `.claude/settings.json`:
+   ```json
+   {
+     "hooks": {
+       "SessionStart":     [{ "hooks": [{ "type": "command", "command": "claudestra-hook SessionStart" }] }],
+       "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "claudestra-hook UserPromptSubmit" }] }],
+       "PreToolUse":       [{ "matcher": "*", "hooks": [{ "type": "command", "command": "claudestra-hook PreToolUse" }] }],
+       "PostToolUse":      [{ "matcher": "*", "hooks": [{ "type": "command", "command": "claudestra-hook PostToolUse" }] }],
+       "SubagentStop":     [{ "hooks": [{ "type": "command", "command": "claudestra-hook SubagentStop" }] }],
+       "Stop":             [{ "hooks": [{ "type": "command", "command": "claudestra-hook Stop" }] }]
+     }
+   }
+   ```
+   `claudestra-hook` is a tiny script that forwards the hook JSON from stdin to the local server and exits 0
+   immediately (it must never block or fail Claude Code).
+3. The server maps hook payloads to the normal event protocol (doc 6): subagents become nodes, tool calls appear on them.
+4. Limits: view-only (no pause/approve from the UI in v1), no CEO routing by Claudestra, flat subagent hierarchy.
+   The agents' definitions from `docs/agents/` can still be exported as Claude Code subagents (`.claude/agents/*.md`)
+   so the same team is used.
+
+**Recommended path:** start with **B** (or **C**) locally, switch to **A** before deploying (doc 12).
+All modes feed the same event stream, so the UI does not change.
+
+Exact SDK/CLI option names and the current terms must be re-checked at implementation time.
 
 ## 2. Does "use only what's needed" work? Yes. Design for it
 

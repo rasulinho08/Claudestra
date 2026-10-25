@@ -1,7 +1,8 @@
 # 10. Roadmap
 
 ## Phase 0 — Spike (1–2 days)
-- One `query()` call streamed to a bare web page.
+- One `query()` call streamed to a bare web page, with `AUTH_MODE=claude_cli_login`.
+- Also: a minimal `/hooks/:event` endpoint for observer mode.
 - **Done when:** you see messages and tool calls appear live, with token cost.
 
 ## Phase 1 — Core loop (week 1)
@@ -38,7 +39,7 @@
 | Hosting | Local first, deploy later (doc 12) |
 | Approvals | `manual / smart / auto` selectable, default `smart` (doc 4) |
 | Agent hierarchy | Own orchestrator, one SDK session per step (doc 2) |
-| Auth | API key by default; subscription login optional and off (doc 11) |
+| Auth | Start local with Claude login (`claude_cli_login`) or `observer`; API key (`api_key`) before deploy. Implement all modes behind one `AUTH_MODE` setting (doc 11 §1.1) |
 | Sandbox | Git worktree in v1 (simple); Docker adapter added before deploy |
 | Custom agents | Agents are data files; creating new ones in the UI is supported from Phase 2 |
 
