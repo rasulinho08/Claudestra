@@ -1,5 +1,7 @@
 // Saved workflows (docs/04 "Workflow"): a plan template with {{params}}, versioned on every update.
 import { randomUUID } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { z } from "zod";
 import { Plan, PlanStep } from "@claudestra/protocol";
 import type { RunStore } from "./store.ts";
@@ -15,6 +17,8 @@ export const WorkflowInput = z.object({
   params: z.array(WorkflowParam).default([{ key: "prompt", label: "Request", default: "" }]),
   steps: z.array(PlanStep).min(1).max(20),
   summary: z.string().default(""),
+  // Node positions from the visual editor, keyed by step id.
+  positions: z.record(z.string(), z.object({ x: z.number(), y: z.number() })).default({}),
 });
 export type WorkflowInput = z.infer<typeof WorkflowInput>;
 
@@ -30,8 +34,8 @@ export class WorkflowStore {
   }
 
   private toWorkflow(r: Row): Workflow {
-    const def = JSON.parse(r.definition) as { prompt: string; steps: WorkflowInput["steps"]; summary: string };
-    return { id: r.id, name: r.name, description: r.description, params: JSON.parse(r.params), prompt: def.prompt, steps: def.steps, summary: def.summary, version: r.version, sourceRunId: r.source_run_id, createdAt: r.created_at, updatedAt: r.updated_at };
+    const def = JSON.parse(r.definition) as { prompt: string; steps: WorkflowInput["steps"]; summary: string; positions?: WorkflowInput["positions"] };
+    return { id: r.id, name: r.name, description: r.description, params: JSON.parse(r.params), prompt: def.prompt, steps: def.steps, summary: def.summary, positions: def.positions ?? {}, version: r.version, sourceRunId: r.source_run_id, createdAt: r.created_at, updatedAt: r.updated_at };
   }
 
   list(): Workflow[] {
@@ -50,7 +54,7 @@ export class WorkflowStore {
   create(input: WorkflowInput, sourceRunId: string | null = null): Workflow {
     const id = randomUUID();
     const now = new Date().toISOString();
-    const definition = JSON.stringify({ prompt: input.prompt, steps: input.steps, summary: input.summary });
+    const definition = JSON.stringify({ prompt: input.prompt, steps: input.steps, summary: input.summary, positions: input.positions });
     const params = JSON.stringify(input.params);
     this.db
       .prepare("INSERT INTO workflows (id, name, description, params, definition, version, source_run_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)")
@@ -64,7 +68,7 @@ export class WorkflowStore {
     if (!current) return undefined;
     const now = new Date().toISOString();
     const version = current.version + 1;
-    const definition = JSON.stringify({ prompt: input.prompt, steps: input.steps, summary: input.summary });
+    const definition = JSON.stringify({ prompt: input.prompt, steps: input.steps, summary: input.summary, positions: input.positions });
     const params = JSON.stringify(input.params);
     this.db.prepare("UPDATE workflows SET name = ?, description = ?, params = ?, definition = ?, version = ?, updated_at = ? WHERE id = ?").run(input.name, input.description, params, definition, version, now, id);
     this.db.prepare("INSERT INTO workflow_versions (workflow_id, version, definition, params, created_at) VALUES (?, ?, ?, ?, ?)").run(id, version, definition, params, now);
@@ -74,6 +78,21 @@ export class WorkflowStore {
   delete(id: string): boolean {
     this.db.prepare("DELETE FROM workflow_versions WHERE workflow_id = ?").run(id);
     return Number(this.db.prepare("DELETE FROM workflows WHERE id = ?").run(id).changes) > 0;
+  }
+
+  // Template gallery: templates/*.json in WorkflowInput format (shareable, importable).
+  static templates(dir: string): (WorkflowInput & { id: string })[] {
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir)
+      .filter((f) => f.endsWith(".json"))
+      .sort()
+      .flatMap((f) => {
+        try {
+          return [{ ...WorkflowInput.parse(JSON.parse(readFileSync(path.join(dir, f), "utf8"))), id: f.replace(/\.json$/, "") }];
+        } catch {
+          return [];
+        }
+      });
   }
 
   // Template from a finished run: its prompt becomes {{prompt}}, its plan the steps.

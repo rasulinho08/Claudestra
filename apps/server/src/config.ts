@@ -51,7 +51,13 @@ export type Config = {
   agentsDir: string;
   skillsDir: string;
   integrationsFile: string;
+  evalsDir: string;
+  templatesDir: string;
   dbPath: string;
+  memoryEnabled: boolean;
+  // Login (docs/12): a single owner token; more users can be added with `npm run user`.
+  authToken: string | null;
+  hooksSecret: string | null;
   claudeCodePath?: string;
 };
 
@@ -97,6 +103,11 @@ export function loadConfig(): Config {
     agentsDir: path.resolve(repoRoot, process.env.AGENTS_DIR ?? "agents"),
     skillsDir: path.resolve(repoRoot, process.env.SKILLS_DIR ?? "skills"),
     integrationsFile: path.resolve(repoRoot, process.env.INTEGRATIONS_FILE ?? "integrations.json"),
+    evalsDir: path.resolve(repoRoot, process.env.EVALS_DIR ?? "evals"),
+    templatesDir: path.resolve(repoRoot, process.env.TEMPLATES_DIR ?? "templates"),
+    memoryEnabled: (process.env.MEMORY ?? "on") !== "off",
+    authToken: process.env.AUTH_TOKEN || null,
+    hooksSecret: process.env.HOOKS_SECRET || null,
     dbPath: process.env.DB_PATH === ":memory:" ? ":memory:" : path.resolve(repoRoot, process.env.DB_PATH ?? "data/claudestra.db"),
     claudeCodePath: process.env.CLAUDE_CODE_PATH || undefined,
   };

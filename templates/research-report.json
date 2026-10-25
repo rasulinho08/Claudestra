@@ -1,0 +1,47 @@
+{
+  "name": "Research report",
+  "description": "Two researchers in parallel, then a sourced comparison report.",
+  "params": [
+    {
+      "key": "prompt",
+      "label": "Topic or question",
+      "default": ""
+    },
+    {
+      "key": "angle",
+      "label": "Second angle (e.g. costs, risks)",
+      "default": "risks and costs"
+    }
+  ],
+  "steps": [
+    {
+      "id": "r1",
+      "agent": "researcher",
+      "task": "Research the main facts and options for: {{prompt}}. Cite primary sources.",
+      "dependsOn": [],
+      "successCriteria": "findings with links",
+      "loopBackTo": ""
+    },
+    {
+      "id": "r2",
+      "agent": "researcher",
+      "task": "Research {{angle}} for: {{prompt}}. Cite primary sources.",
+      "dependsOn": [],
+      "successCriteria": "findings with links",
+      "loopBackTo": ""
+    },
+    {
+      "id": "write",
+      "agent": "doc-writer",
+      "task": "Write report.md combining both research results: summary, comparison table, recommendations, sources.",
+      "dependsOn": [
+        "r1",
+        "r2"
+      ],
+      "successCriteria": "report.md with sources",
+      "loopBackTo": ""
+    }
+  ],
+  "prompt": "{{prompt}}",
+  "summary": "Two researchers in parallel, then a sourced comparison report."
+}

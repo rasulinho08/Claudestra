@@ -23,6 +23,7 @@ import { runAgentSession, type Authorization, type SessionRunner } from "./sessi
 import { evaluate } from "./approvals.ts";
 import type { SkillLibrary } from "./skills.ts";
 import type { IntegrationRegistry } from "./integrations.ts";
+import type { Memory } from "./memory.ts";
 import type { SessionOutcome } from "./sdk-mapper.ts";
 import {
   buildFinalPrompt,
@@ -71,6 +72,8 @@ type RunContext = {
   warned: boolean;
   exceeded: boolean;
   startedAt: number;
+  // Owner notes from memory, added to every step prompt.
+  notes: string;
 };
 
 type StepResult = StepReport & { decision?: "continue" | "finish" };
@@ -79,6 +82,7 @@ export type OrchestratorDeps = {
   runSession?: SessionRunner;
   skills?: SkillLibrary;
   integrations?: IntegrationRegistry;
+  memory?: Memory;
 };
 
 export class Orchestrator {
@@ -118,6 +122,7 @@ export class Orchestrator {
       warned: false,
       exceeded: false,
       startedAt: Date.now(),
+      notes: "",
     };
     this.runs.set(runId, ctx);
     try {
@@ -172,6 +177,15 @@ export class Orchestrator {
     const ceo = this.agents.ceo();
     const roster = this.agents.specialists();
 
+    // 0. Memory: owner notes for everyone, related earlier runs for the CEO.
+    const memory = this.deps.memory;
+    ctx.notes = memory?.notesBlock() ?? "";
+    const recalled = memory && !suppliedPlan ? memory.recall(ctx.prompt) : [];
+    if (ctx.notes || recalled.length > 0) {
+      this.emitRun(ctx, { type: "memory.recalled", data: { notes: memory?.notes().length ?? 0, runs: recalled.map((r) => ({ runId: r.runId, prompt: r.prompt.slice(0, 200) })) } });
+    }
+    const planningContext = [ctx.notes, memory?.recallBlock(recalled) ?? ""].filter(Boolean).join("\n\n");
+
     // 1. Plan (or take the workflow's plan).
     let plan: Plan;
     let directAnswer = "";
@@ -183,7 +197,7 @@ export class Orchestrator {
         CEO_PLAN_STEP,
         ceo,
         "Plan the work",
-        buildPlanningPrompt(ctx.prompt, roster, ctx.profile.planSizeCap, ctx.profile.budgetUsd),
+        buildPlanningPrompt(ctx.prompt, roster, ctx.profile.planSizeCap, ctx.profile.budgetUsd, planningContext),
         { outputSchema: ceoDecisionSchema, budgetUsd: Math.min(ceo.limits.maxBudgetUsd, ctx.profile.budgetUsd) },
       );
       if (!this.running(ctx)) return;
@@ -313,7 +327,7 @@ export class Orchestrator {
     let result: StepResult;
 
     for (;;) {
-      result = await this.runAgentStep(ctx, step.id, agent, task, buildStepPrompt(ctx.prompt, { ...step, task }, inputs), inputs, attempt === 1);
+      result = await this.runAgentStep(ctx, step.id, agent, task, buildStepPrompt(ctx.prompt, { ...step, task }, inputs, ctx.notes), inputs, attempt === 1);
       if (result.status === "succeeded" || !this.running(ctx)) break;
 
       const review = await this.reviewFailure(ctx, plan, { ...step, task }, result.summary, attempt);
@@ -352,13 +366,13 @@ export class Orchestrator {
       const fixTask = `Fix every must-fix finding from ${lastId} in the work of step ${target.id} (${target.task}). Change only what the findings require.`;
       this.emitStep(ctx, fixId, target.agent, { type: "step.added", data: { id: fixId, agent: target.agent, task: fixTask, dependsOn: [lastId], loopOf: target.id, iteration: n } });
       const fixInputs = targetReport ? [targetReport, findings] : [findings];
-      const fix = await this.runAgentStep(ctx, fixId, fixer, fixTask, buildStepPrompt(ctx.prompt, { ...target, id: fixId, task: fixTask }, fixInputs), [findings], true);
+      const fix = await this.runAgentStep(ctx, fixId, fixer, fixTask, buildStepPrompt(ctx.prompt, { ...target, id: fixId, task: fixTask }, fixInputs, ctx.notes), [findings], true);
       if (fix.status !== "succeeded") break;
       targetReport = fix;
 
       const checkId = `${verifier.id}-r${n}`;
       this.emitStep(ctx, checkId, verifier.agent, { type: "step.added", data: { id: checkId, agent: verifier.agent, task: verifier.task, dependsOn: [fixId], loopOf: verifier.id, iteration: n } });
-      const check = await this.runAgentStep(ctx, checkId, checker, verifier.task, buildStepPrompt(ctx.prompt, { ...verifier, id: checkId }, [fix]), [fix], true);
+      const check = await this.runAgentStep(ctx, checkId, checker, verifier.task, buildStepPrompt(ctx.prompt, { ...verifier, id: checkId }, [fix], ctx.notes), [fix], true);
       if (check.status !== "succeeded") break;
       last = check;
       lastId = checkId;
@@ -549,6 +563,7 @@ export class Orchestrator {
   }
 
   private complete(ctx: RunContext, answer: string) {
+    if (this.running(ctx)) this.deps.memory?.remember(ctx.runId, ctx.prompt, answer);
     this.emitRun(ctx, {
       type: "run.completed",
       data: { answer, totalCostUsd: round(ctx.spentUsd), durationMs: Date.now() - ctx.startedAt, numTurns: ctx.numTurns },
@@ -583,8 +598,9 @@ export class Orchestrator {
   }
 }
 
-export function buildStepPrompt(request: string, step: { id: string; task: string; successCriteria?: string }, inputs: StepReport[]): string {
+export function buildStepPrompt(request: string, step: { id: string; task: string; successCriteria?: string }, inputs: StepReport[], notes = ""): string {
   const sections = [
+    ...(notes ? [`# ${notes}`] : []),
     `# Client request\n${request}`,
     `# Your task (step ${step.id})\n${step.task}${step.successCriteria ? `\n\nSuccess criteria: ${step.successCriteria}` : ""}`,
   ];

@@ -17,7 +17,7 @@ export function verdictOf(report: string): "approve" | "changes" | "unknown" {
   return /CHANGES REQUESTED/i.test(report) ? "changes" : "unknown";
 }
 
-export function buildPlanningPrompt(request: string, roster: AgentDefinition[], planSizeCap: number, budgetUsd: number): string {
+export function buildPlanningPrompt(request: string, roster: AgentDefinition[], planSizeCap: number, budgetUsd: number, context = ""): string {
   const agents = roster
     .map((a) => `- ${a.info.id} (${a.info.name}, cost: ${a.info.modelClass}): ${a.info.description}`)
     .join("\n");
@@ -27,7 +27,9 @@ Roster (the only agents you may use):
 ${agents}
 
 Limits: at most ${planSizeCap} steps; run budget $${budgetUsd.toFixed(2)}. Cheaper agents and fewer steps are better when they are enough.
-
+${context ? `
+${context}
+` : ""}
 Client request:
 <request>
 ${request}

@@ -23,6 +23,9 @@ test("safe bash list", () => {
   assert.ok(!isSafeBash("node -e \"require('fs')\"", ws));
   assert.ok(!isSafeBash("python3 -c 'import os'", ws));
   assert.ok(isSafeBash("python3 test_prime.py", ws));
+  assert.ok(!isSafeBash("type C:\\Windows\\win.ini", "C:\\work\\run"));
+  assert.ok(!isSafeBash("cat C:/Users/me/.ssh/id_rsa", "C:\\work\\run"));
+  assert.ok(isSafeBash("cat C:/work/run/a.txt", "C:\\work\\run"));
 });
 
 test("patterns match tool and primary argument", () => {

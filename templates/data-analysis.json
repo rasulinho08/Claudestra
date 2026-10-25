@@ -1,0 +1,33 @@
+{
+  "name": "Data analysis",
+  "description": "Analyse a dataset described or pasted in the prompt; results with exact queries, then a short brief.",
+  "params": [
+    {
+      "key": "prompt",
+      "label": "Question + data (paste CSV or describe)",
+      "default": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "analyse",
+      "agent": "data-analyst",
+      "task": "{{prompt}}\n\nWrite the data you were given to data.csv if pasted, analyse it with a script, and write analysis.md.",
+      "dependsOn": [],
+      "successCriteria": "analysis.md with numbers and the script used",
+      "loopBackTo": ""
+    },
+    {
+      "id": "brief",
+      "agent": "project-manager",
+      "task": "Turn analysis.md into a 5-bullet decision brief in brief.md with next steps.",
+      "dependsOn": [
+        "analyse"
+      ],
+      "successCriteria": "brief.md",
+      "loopBackTo": ""
+    }
+  ],
+  "prompt": "{{prompt}}",
+  "summary": "Analyse a dataset described or pasted in the prompt; results with exact queries, then a short brief."
+}

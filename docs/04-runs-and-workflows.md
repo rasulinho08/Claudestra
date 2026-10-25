@@ -53,6 +53,14 @@ pending ──▶ ready ──▶ running ──▶ succeeded
 Scheduling rule: a step becomes `ready` when all `dependsOn` are `succeeded`. Ready steps run in parallel up to
 `maxConcurrentSteps` (default 3).
 
+## Triggers (implemented)
+Per workflow, in the Workflows page:
+- **Schedule**: 5-field cron in server-local time (`0 9 * * 1-5` = weekdays 09:00). Checked every 15 s, fired once per minute.
+- **Webhook**: `POST /api/triggers/<id>/fire` with `?secret=…` or header `X-Claudestra-Secret`, or from GitHub with the
+  trigger secret as the webhook secret (signature checked). JSON string fields become workflow params; GitHub events
+  fill `prompt`, `title`, `body`, `repo`, `url`, `github_event`, `github_action`.
+- Each trigger has its own profile and approval mode (default eco + smart). Caps apply. Runs record `origin: trigger:<id>`.
+
 ## Run states
 `planning → running → (paused) → completed | failed | cancelled`
 

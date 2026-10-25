@@ -1,0 +1,53 @@
+{
+  "name": "Bug fix with regression test",
+  "description": "Reproduce with a failing test, fix, verify, review. Paste the bug report and any code into the prompt.",
+  "params": [
+    {
+      "key": "prompt",
+      "label": "Bug report (and code)",
+      "default": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "repro",
+      "agent": "tester",
+      "task": "Write a failing test that reproduces this bug: {{prompt}}",
+      "dependsOn": [],
+      "successCriteria": "a test that fails for the reported reason",
+      "loopBackTo": ""
+    },
+    {
+      "id": "fix",
+      "agent": "coder",
+      "task": "Fix the bug so the reproduction test passes without breaking other behaviour.",
+      "dependsOn": [
+        "repro"
+      ],
+      "successCriteria": "reproduction test passes",
+      "loopBackTo": ""
+    },
+    {
+      "id": "verify",
+      "agent": "tester",
+      "task": "Run all tests and confirm the fix.",
+      "dependsOn": [
+        "fix"
+      ],
+      "successCriteria": "all tests pass",
+      "loopBackTo": "fix"
+    },
+    {
+      "id": "review",
+      "agent": "reviewer",
+      "task": "Review the fix for side effects and missing cases.",
+      "dependsOn": [
+        "verify"
+      ],
+      "successCriteria": "VERDICT: APPROVE",
+      "loopBackTo": "fix"
+    }
+  ],
+  "prompt": "{{prompt}}",
+  "summary": "Reproduce with a failing test, fix, verify, review. Paste the bug report and any code into the prompt."
+}

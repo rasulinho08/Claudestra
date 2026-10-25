@@ -9,7 +9,8 @@ Server: `orchestrator.ts` (run lifecycle, approvals, pause, loops, reviews), `se
 `approvals.ts` (policy), `plan.ts` (CEO prompts, validation), `store.ts` (SQLite), `workflows.ts`, `skills.ts`,
 `integrations.ts`, `analytics.ts`, `app.ts` (HTTP). Web: `run-state.ts` (event reducer), `RunsPage.tsx`,
 `graph.ts` + `Canvas.tsx` (React Flow), `stage/` (robot view: `world.ts` logic, `draw.ts` rendering), `pages/`.
-Open items are listed under Phase 5 in docs/10.
+Phase 5 extras: `memory.ts`, `access.ts` (login/roles), `triggers.ts` + `cron.ts`, `evals.ts`, `runs.ts` (shared run launcher),
+web `WorkflowEditor.tsx` and pages Memory, Evals, Users. Windows instructions: docs/14.
 
 ## Order of work
 1. Read `README.md`, then docs 1, 2, 3, 6, 7, 11 and `docs/agents/`.

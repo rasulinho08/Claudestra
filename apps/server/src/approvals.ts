@@ -17,16 +17,19 @@ const SAFE_BASH_PREFIXES = [
 ];
 const RISKY_BASH = /(\bsudo\b|\brm\s|\bcurl\b|\bwget\b|\bssh\b|\bscp\b|\bgit\s+push\b|\bnpm\s+publish\b|\bchmod\b|\bchown\b|\bdd\b|\bmkfs\b|>\s*\/|\s~\/|\.\.\/)/;
 
+const normalizePath = (p: string) => p.replace(/\\/g, "/").replace(/^([a-z]):/i, (_, d: string) => `${d.toLowerCase()}:`);
+
 export function splitCommand(command: string): string[] {
   return command.split(/&&|\|\||;|\||\n/).map((s) => s.trim()).filter(Boolean);
 }
 
 export function isSafeBash(command: string, workspace: string): boolean {
   if (RISKY_BASH.test(command)) return false;
-  // Absolute paths must stay inside the workspace.
-  for (const m of command.matchAll(/(?:^|\s)(\/[^\s'"]+)/g)) {
-    const p = m[1]!;
-    if (!p.startsWith(workspace) && !p.startsWith("/dev/null") && !p.startsWith("/tmp/")) return false;
+  // Absolute paths (POSIX or Windows drive paths) must stay inside the workspace.
+  const ws = normalizePath(workspace);
+  for (const m of command.matchAll(/(?:^|[\s'"=])(\/[^\s'"]+|[A-Za-z]:[\\/][^\s'"]*)/g)) {
+    const p = normalizePath(m[1]!);
+    if (!p.startsWith(ws) && !p.startsWith("/dev/null") && !p.startsWith("/tmp/")) return false;
   }
   return splitCommand(command).every((segment) => {
     const words = segment.split(/\s+/).filter((w) => !/^[A-Z_][A-Z0-9_]*=/.test(w));

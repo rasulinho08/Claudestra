@@ -1,0 +1,73 @@
+{
+  "name": "Feature from idea",
+  "description": "Requirements \u2192 design \u2192 code \u2192 tests \u2192 review loop \u2192 docs. For new features in a small codebase.",
+  "params": [
+    {
+      "key": "prompt",
+      "label": "Feature idea",
+      "default": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "ba",
+      "agent": "business-analyst",
+      "task": "Write requirements.md with user stories and testable acceptance criteria for: {{prompt}}",
+      "dependsOn": [],
+      "successCriteria": "requirements.md exists with acceptance criteria",
+      "loopBackTo": ""
+    },
+    {
+      "id": "arch",
+      "agent": "architect",
+      "task": "Write design.md with a file-level plan for implementing requirements.md.",
+      "dependsOn": [
+        "ba"
+      ],
+      "successCriteria": "design.md lists files and interfaces",
+      "loopBackTo": ""
+    },
+    {
+      "id": "code",
+      "agent": "coder",
+      "task": "Implement the feature following design.md and requirements.md.",
+      "dependsOn": [
+        "arch"
+      ],
+      "successCriteria": "all acceptance criteria implemented",
+      "loopBackTo": ""
+    },
+    {
+      "id": "test",
+      "agent": "tester",
+      "task": "Write and run tests for the acceptance criteria in requirements.md.",
+      "dependsOn": [
+        "code"
+      ],
+      "successCriteria": "tests run and pass",
+      "loopBackTo": "code"
+    },
+    {
+      "id": "review",
+      "agent": "reviewer",
+      "task": "Review the implementation against requirements.md and design.md.",
+      "dependsOn": [
+        "test"
+      ],
+      "successCriteria": "VERDICT: APPROVE",
+      "loopBackTo": "code"
+    },
+    {
+      "id": "docs",
+      "agent": "doc-writer",
+      "task": "Write a README section explaining how to use the feature.",
+      "dependsOn": [
+        "review"
+      ],
+      "successCriteria": "README updated",
+      "loopBackTo": ""
+    }
+  ],
+  "prompt": "{{prompt}}",
+  "summary": "Requirements \u2192 design \u2192 code \u2192 tests \u2192 review loop \u2192 docs. For new features in a small codebase."
+}

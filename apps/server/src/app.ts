@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { z } from "zod";
-import { ApprovalDecision, CreateRunRequest, type ClaudestraEvent, type HealthResponse } from "@claudestra/protocol";
+import { ApprovalDecision, CreateRunRequest, Role, type ClaudestraEvent, type HealthResponse, type SessionInfo } from "@claudestra/protocol";
 import type { Config } from "./config.ts";
 import { resolveSdkAuth } from "./auth.ts";
 import type { RunStore } from "./store.ts";
@@ -12,9 +12,14 @@ import type { StartOptions } from "./orchestrator.ts";
 import { HookEventMapper, type HookPayload } from "./hook-mapper.ts";
 import type { SkillLibrary } from "./skills.ts";
 import type { IntegrationRegistry } from "./integrations.ts";
-import { WorkflowInput, type WorkflowStore } from "./workflows.ts";
-import { analytics, startOfDay, startOfMonth } from "./analytics.ts";
+import { WorkflowInput, WorkflowStore } from "./workflows.ts";
+import { analytics } from "./analytics.ts";
 import { listFiles, readWorkspaceFile } from "./files.ts";
+import { HttpError, RunLauncher } from "./runs.ts";
+import { Memory } from "./memory.ts";
+import { Access, allows, requiredRole, safeEqual, tokenFrom } from "./access.ts";
+import { TriggerInput, TriggerStore, paramsFromPayload, runTrigger, verifyWebhook, type Fire } from "./triggers.ts";
+import { Evals } from "./evals.ts";
 
 export type RunStarter = {
   start(runId: string, opts: StartOptions): Promise<void>;
@@ -32,20 +37,94 @@ export type Services = {
   skills: SkillLibrary;
   integrations: IntegrationRegistry;
   workflows: WorkflowStore;
+  memory?: Memory;
+  access?: Access;
+  triggers?: TriggerStore;
+  evals?: Evals;
+  launcher?: RunLauncher;
+  templatesDir?: string;
+  hooksSecret?: string | null;
 };
 
+type Env = { Variables: { user: SessionInfo["user"] } };
+
 const HEARTBEAT_MS = 15_000;
+const COOKIE_DAYS = 30;
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+const issues = (err: z.ZodError) => err.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ");
 
 async function body(c: Context): Promise<unknown> {
   return c.req.json().catch(() => null);
 }
 
+function fail(c: Context, err: unknown) {
+  if (err instanceof HttpError) return c.json({ error: err.message }, err.status);
+  return c.json({ error: message(err) }, 400);
+}
+
+const isLoopback = (addr: string | undefined) => !addr || addr === "127.0.0.1" || addr === "::1" || addr === "::ffff:127.0.0.1";
+
+function remoteAddress(c: Context): string | undefined {
+  try {
+    return getConnInfo(c).remote.address;
+  } catch {
+    return undefined; // app.request() in tests has no socket
+  }
+}
+
 export function createApp(s: Services) {
   const { config, store, agents, runner, skills, integrations, workflows } = s;
-  const app = new Hono();
+  const memory = s.memory ?? new Memory(store);
+  const access = s.access ?? new Access(store, null);
+  const triggers = s.triggers ?? new TriggerStore(store);
+  const launcher = s.launcher ?? new RunLauncher(config, store, agents, workflows, runner);
+  const evals = s.evals ?? new Evals(path.join(config.agentsDir, "../evals"), store, launcher, config.workspacesDir);
+  const templatesDir = s.templatesDir ?? path.join(config.agentsDir, "../templates");
+  const app = new Hono<Env>();
   const observers = new Map<string, HookEventMapper>();
+
+  // ---- access control ------------------------------------------------------------------------
+  // Public: health, session, login/logout, webhook triggers (own secret). Observer hooks: loopback or HOOKS_SECRET.
+  const PUBLIC = [/^\/api\/health$/, /^\/api\/session$/, /^\/api\/login$/, /^\/api\/logout$/, /^\/api\/triggers\/[^/]+\/fire$/];
+
+  app.use("/api/*", async (c, next) => {
+    const user = access.enabled ? access.identify(tokenFrom(c.req.header("authorization"), c.req.header("cookie"), c.req.query("token"))) : { name: "local", role: "owner" as const };
+    c.set("user", user);
+    if (!access.enabled || PUBLIC.some((re) => re.test(c.req.path))) return next();
+    if (!user) return c.json({ error: "login required" }, 401);
+    if (!allows(user.role, requiredRole(c.req.method, c.req.path))) return c.json({ error: `the ${user.role} role cannot do this` }, 403);
+    return next();
+  });
+
+  app.get("/api/session", (c) => c.json({ authEnabled: access.enabled, user: c.get("user") } satisfies SessionInfo));
+
+  app.post("/api/login", async (c) => {
+    const parsed = z.object({ token: z.string().min(1).max(500) }).safeParse(await body(c));
+    const user = parsed.success ? access.identify(parsed.data.token) : null;
+    if (!parsed.success || !user) return c.json({ error: "invalid token" }, 401);
+    const secure = c.req.url.startsWith("https:") ? "; Secure" : "";
+    c.header("Set-Cookie", `claudestra_token=${encodeURIComponent(parsed.data.token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_DAYS * 86400}${secure}`);
+    return c.json({ user });
+  });
+
+  app.post("/api/logout", (c) => {
+    c.header("Set-Cookie", "claudestra_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+    return c.json({ ok: true });
+  });
+
+  app.get("/api/users", (c) => c.json(access.users()));
+  app.post("/api/users", async (c) => {
+    const parsed = z.object({ name: z.string(), role: Role }).safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    if (!access.enabled && parsed.data.role !== "owner") return c.json({ error: "the first user must be an owner (it turns login on)" }, 400);
+    try {
+      return c.json(access.addUser(parsed.data.name, parsed.data.role), 201);
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+  app.delete("/api/users/:id", (c) => c.json({ ok: access.removeUser(c.req.param("id")) }));
 
   app.get("/api/health", (c) => {
     const auth = resolveSdkAuth(config.authMode, process.env);
@@ -70,55 +149,12 @@ export function createApp(s: Services) {
   app.post("/api/runs", async (c) => {
     const parsed = CreateRunRequest.safeParse(await body(c));
     if (!parsed.success) return c.json({ error: "invalid request" }, 400);
-    const auth = resolveSdkAuth(config.authMode, process.env);
-    if (!auth.ok) return c.json({ error: auth.reason }, 409);
-
-    // Daily / monthly caps (docs/11 §2.3) are checked before any spend.
-    if (config.dailyBudgetUsd !== null && store.spentSince(startOfDay()) >= config.dailyBudgetUsd) {
-      return c.json({ error: `Daily budget of $${config.dailyBudgetUsd} reached` }, 429);
+    try {
+      const { runId } = launcher.start({ ...parsed.data, createdBy: c.get("user")?.name, origin: "user" });
+      return c.json({ runId }, 201);
+    } catch (err) {
+      return fail(c, err);
     }
-    if (config.monthlyBudgetUsd !== null && store.spentSince(startOfMonth()) >= config.monthlyBudgetUsd) {
-      return c.json({ error: `Monthly budget of $${config.monthlyBudgetUsd} reached` }, 429);
-    }
-
-    const req = parsed.data;
-    const profile = req.profile ?? config.defaultProfile;
-    const approvalMode = req.approvalMode ?? config.defaultApprovalMode;
-    let prompt = req.prompt;
-    let plan: StartOptions["plan"];
-    if (req.workflowId) {
-      const wf = workflows.get(req.workflowId);
-      if (!wf) return c.json({ error: "workflow not found" }, 404);
-      try {
-        ({ prompt, plan } = workflows.instantiate(wf, { prompt: req.prompt, ...req.params }));
-      } catch (err) {
-        return c.json({ error: message(err) }, 400);
-      }
-      const unknown = plan.steps.find((st) => !agents.get(st.agent) || st.agent === "ceo");
-      if (unknown) return c.json({ error: `workflow uses unknown agent "${unknown.agent}"` }, 400);
-    }
-    if (!prompt) return c.json({ error: "prompt is required" }, 400);
-
-    const runId = randomUUID();
-    store.create({ id: runId, prompt, source: "claudestra" });
-    store.append(runId, {
-      type: "run.started",
-      data: {
-        prompt,
-        source: "claudestra",
-        authMode: config.authMode,
-        budgetUsd: config.profiles[profile].budgetUsd,
-        agents: agents.infos(),
-        profile,
-        approvalMode,
-        mode: plan ? "workflow" : "dynamic",
-        workflowId: req.workflowId,
-      },
-    });
-    runner.start(runId, { prompt, profile, approvalMode, plan }).catch((err: unknown) => {
-      if (store.status(runId) === "running") store.append(runId, { type: "run.failed", data: { error: message(err) } });
-    });
-    return c.json({ runId }, 201);
   });
 
   for (const action of ["cancel", "pause", "resume"] as const) {
@@ -193,7 +229,7 @@ export function createApp(s: Services) {
     try {
       return c.json(readWorkspaceFile(path.join(config.workspacesDir, id), c.req.query("path") ?? ""));
     } catch (err) {
-      return c.json({ error: message(err) }, 400);
+      return fail(c, err);
     }
   });
 
@@ -210,7 +246,7 @@ export function createApp(s: Services) {
     try {
       return c.json(agents.save(id, parsed.data.source).info);
     } catch (err) {
-      return c.json({ error: message(err) }, 400);
+      return fail(c, err);
     }
   });
 
@@ -231,7 +267,7 @@ export function createApp(s: Services) {
       skills.save(c.req.param("name"), parsed.data.source);
       return c.json({ ok: true });
     } catch (err) {
-      return c.json({ error: message(err) }, 400);
+      return fail(c, err);
     }
   });
 
@@ -240,7 +276,7 @@ export function createApp(s: Services) {
     return c.json({ error: integrations.error, servers: integrations.list(agents.all().map((a) => ({ id: a.info.id, integrations: a.integrations }))) });
   });
 
-  // ---- workflows ---------------------------------------------------------------------------
+  // ---- workflows & templates ---------------------------------------------------------------
 
   app.get("/api/workflows", (c) => c.json(workflows.list()));
 
@@ -249,6 +285,17 @@ export function createApp(s: Services) {
     return wf ? c.json({ ...wf, versions: workflows.versions(wf.id) }) : c.json({ error: "workflow not found" }, 404);
   });
 
+  // Shareable JSON (import it again with POST /api/workflows or drop it into templates/).
+  app.get("/api/workflows/:id/export", (c) => {
+    const wf = workflows.get(c.req.param("id"));
+    if (!wf) return c.json({ error: "workflow not found" }, 404);
+    const { name, description, prompt, params, steps, summary, positions } = wf;
+    c.header("Content-Disposition", `attachment; filename="${name.replace(/[^\w.-]+/g, "-").toLowerCase()}.json"`);
+    return c.json({ name, description, prompt, params, steps, summary, positions });
+  });
+
+  app.get("/api/templates", (c) => c.json(WorkflowStore.templates(templatesDir)));
+
   app.post("/api/workflows", async (c) => {
     const raw = (await body(c)) as Record<string, unknown> | null;
     if (raw && typeof raw.fromRunId === "string") {
@@ -256,19 +303,115 @@ export function createApp(s: Services) {
       if (!input) return c.json({ error: "that run has no team plan to save" }, 400);
       return c.json(workflows.create(input, raw.fromRunId), 201);
     }
+    if (raw && typeof raw.fromTemplate === "string") {
+      const tpl = WorkflowStore.templates(templatesDir).find((t) => t.id === raw.fromTemplate);
+      if (!tpl) return c.json({ error: "template not found" }, 404);
+      const { id: _id, ...input } = tpl;
+      return c.json(workflows.create(input), 201);
+    }
     const parsed = WorkflowInput.safeParse(raw);
-    if (!parsed.success) return c.json({ error: parsed.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ") }, 400);
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    const unknown = parsed.data.steps.find((st) => !agents.get(st.agent) || st.agent === "ceo");
+    if (unknown) return c.json({ error: `unknown agent "${unknown.agent}"` }, 400);
     return c.json(workflows.create(parsed.data), 201);
   });
 
   app.put("/api/workflows/:id", async (c) => {
     const parsed = WorkflowInput.safeParse(await body(c));
-    if (!parsed.success) return c.json({ error: parsed.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ") }, 400);
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    const unknown = parsed.data.steps.find((st) => !agents.get(st.agent) || st.agent === "ceo");
+    if (unknown) return c.json({ error: `unknown agent "${unknown.agent}"` }, 400);
     const wf = workflows.update(c.req.param("id"), parsed.data);
     return wf ? c.json(wf) : c.json({ error: "workflow not found" }, 404);
   });
 
   app.delete("/api/workflows/:id", (c) => c.json({ ok: workflows.delete(c.req.param("id")) }));
+
+  // ---- triggers ----------------------------------------------------------------------------
+
+  const fire: Fire = (t, params) =>
+    launcher.start({ prompt: params.prompt ?? "", workflowId: t.workflowId, params, profile: t.profile, approvalMode: t.approvalMode, origin: `trigger:${t.id}`, createdBy: t.name || "trigger" }).runId;
+
+  app.get("/api/triggers", (c) => {
+    const role = c.get("user")?.role;
+    // Secrets (webhook URLs) are for owners only.
+    return c.json(triggers.list().map((t) => (role === "owner" ? t : { ...t, secret: "" })));
+  });
+
+  app.post("/api/triggers", async (c) => {
+    const parsed = TriggerInput.safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    if (!workflows.get(parsed.data.workflowId)) return c.json({ error: "workflow not found" }, 404);
+    try {
+      return c.json(triggers.create(parsed.data), 201);
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  app.put("/api/triggers/:id", async (c) => {
+    const parsed = TriggerInput.safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    try {
+      const t = triggers.update(c.req.param("id"), parsed.data);
+      return t ? c.json(t) : c.json({ error: "trigger not found" }, 404);
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  app.delete("/api/triggers/:id", (c) => c.json({ ok: triggers.delete(c.req.param("id")) }));
+
+  // Manual "run now" from the UI.
+  app.post("/api/triggers/:id/run", (c) => {
+    const t = triggers.get(c.req.param("id"));
+    if (!t) return c.json({ error: "trigger not found" }, 404);
+    const runId = runTrigger(triggers, fire, t, t.params);
+    return runId ? c.json({ runId }) : c.json({ error: triggers.get(t.id)?.lastError ?? "could not start" }, 400);
+  });
+
+  // Webhook endpoint: GitHub (X-Hub-Signature-256 with the trigger secret) or any client with X-Claudestra-Secret / ?secret=.
+  app.post("/api/triggers/:id/fire", async (c) => {
+    const t = triggers.get(c.req.param("id"));
+    if (!t || t.kind !== "webhook") return c.json({ error: "trigger not found" }, 404);
+    const raw = await c.req.text();
+    if (!verifyWebhook(t, raw, { signature: c.req.header("x-hub-signature-256"), secret: c.req.header("x-claudestra-secret"), query: c.req.query("secret") })) {
+      return c.json({ error: "bad signature or secret" }, 401);
+    }
+    if (!t.enabled) return c.json({ ok: true, skipped: "trigger disabled" });
+    const event = c.req.header("x-github-event");
+    if (event === "ping") return c.json({ ok: true, pong: true });
+    let payload: unknown = {};
+    try {
+      payload = raw ? JSON.parse(raw) : {};
+    } catch {
+      payload = { prompt: raw.slice(0, 10_000) };
+    }
+    const runId = runTrigger(triggers, fire, t, { ...t.params, ...paramsFromPayload(payload, event) });
+    return runId ? c.json({ ok: true, runId }, 202) : c.json({ error: triggers.get(t.id)?.lastError ?? "could not start" }, 409);
+  });
+
+  // ---- memory ------------------------------------------------------------------------------
+
+  app.get("/api/memory", (c) => c.json({ enabled: memory.isEnabled, notes: memory.notes(), runs: memory.runs() }));
+  app.post("/api/memory/notes", async (c) => {
+    const parsed = z.object({ text: z.string().trim().min(1).max(1000) }).safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: "text is required" }, 400);
+    return c.json(memory.addNote(parsed.data.text), 201);
+  });
+  app.delete("/api/memory/notes/:id", (c) => c.json({ ok: memory.deleteNote(c.req.param("id")) }));
+  app.delete("/api/memory/runs/:runId", (c) => c.json({ ok: memory.forget(c.req.param("runId")) }));
+
+  // ---- evals -------------------------------------------------------------------------------
+
+  app.get("/api/evals", (c) => c.json({ suites: evals.suites(), history: evals.history() }));
+  app.post("/api/evals/:suite/run", (c) => {
+    try {
+      return c.json({ evalRunId: evals.start(c.req.param("suite"), c.get("user")?.name) }, 202);
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
 
   // ---- analytics ---------------------------------------------------------------------------
 
@@ -280,6 +423,11 @@ export function createApp(s: Services) {
   // ---- observer mode: Claude Code hooks POST here (via bin/claudestra-hook.mjs) -------------
 
   app.post("/hooks/:event", async (c) => {
+    if (access.enabled) {
+      const given = c.req.header("x-claudestra-secret");
+      const ok = s.hooksSecret ? Boolean(given) && safeEqual(given!, s.hooksSecret) : isLoopback(remoteAddress(c));
+      if (!ok) return c.json({ error: "hooks need HOOKS_SECRET or a local connection" }, 401);
+    }
     const event = c.req.param("event");
     const payload = ((await body(c)) ?? {}) as HookPayload;
     const sessionId = typeof payload.session_id === "string" ? payload.session_id : "unknown-session";

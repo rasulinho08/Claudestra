@@ -38,6 +38,11 @@ export function testConfig(over: Partial<Config> = {}): Config {
     agentsDir,
     skillsDir: path.join(root, "skills"),
     integrationsFile: path.join(root, "integrations.example.json"),
+    evalsDir: path.join(root, "evals"),
+    templatesDir: path.join(root, "templates"),
+    memoryEnabled: true,
+    authToken: null,
+    hooksSecret: null,
     dbPath: ":memory:",
     ...over,
   };

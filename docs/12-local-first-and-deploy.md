@@ -12,7 +12,7 @@ Required before exposing to a network:
 
 | Concern | Change |
 |---|---|
-| Auth | Add login (single-user token or OAuth); all API + SSE behind it |
+| Auth | ✅ Implemented: `AUTH_TOKEN` and/or users with roles (`npm run user -- add NAME owner`); HttpOnly cookie; SSE and hooks protected; the server refuses to bind to a non-local `HOST` without login |
 | Auth mode | Force `AUTH_MODE=api_key`; disable `claude_cli_login` |
 | Sandbox | Docker container per run (no host mount, resource limits, egress allow-list) |
 | Secrets | Secret manager / encrypted store instead of `.env` |

@@ -4,7 +4,9 @@
 routes work between them, and streams every step to a live graph UI. Built on the Claude Agent SDK.
 Local first, deploy later.
 
-> Status: **Phases 0–5 implemented**: 11-agent company, approval modes, coder⇄reviewer loops, skills, MCP apps, workflows, replay, cost analytics, and the animated robot **Stage** for a second monitor or OBS.
+> Status: **all phases (0–5) implemented**: 11-agent company, approval modes, coder⇄reviewer loops, skills, MCP apps, workflows with a visual editor, triggers (schedule, webhook, GitHub), cross-run memory, login with roles, evals, templates, replay, cost analytics, and the animated robot **Stage** for a second monitor or OBS.
+
+**Windows:** step-by-step cmd instructions are in [docs/14-running-on-windows.md](docs/14-running-on-windows.md).
 
 ## Run it locally
 
@@ -35,7 +37,8 @@ Doc Writer, Data Analyst, Project Manager. Edit them in the **Agents** page or t
 Each run gets its own folder under `workspaces/`; file tools are confined to it and Bash runs there (inside the
 OS sandbox on Linux/macOS). Runs, events, approvals and workflows are stored in `data/claudestra.db`.
 
-Pages: **Runs** · **Workflows** · **Agents** · **Skills** · **Apps** · **Costs** · **▶ Stage window**.
+Pages: **Runs** · **Workflows** (templates, visual editor, triggers, import/export) · **Agents** · **Skills** · **Apps** ·
+**Memory** · **Evals** · **Costs** · **Users** · **▶ Stage window**.
 
 Production-style: `npm run build && npm start` serves the app and API together on http://127.0.0.1:8787.
 
@@ -46,6 +49,7 @@ Production-style: `npm run build && npm start` serves the app and API together o
 | `npm run typecheck` | TypeScript across all packages |
 | `npm run build` | Production build of the web app |
 | `npm start` | Server only; also serves the built web app on :8787 |
+| `npm run user -- add NAME owner` | Turn on login and create a user token (roles: owner, operator, viewer) |
 
 ### Observer mode (watch your normal Claude Code sessions)
 Keep Claudestra running and add hooks to the project's `.claude/settings.json` that call
@@ -58,6 +62,8 @@ Each Claude Code session appears as a run in the left list. Set `AUTH_MODE=obser
 ```
 agents/            Agent definitions (YAML frontmatter + system prompt)
 skills/            Skill library (one folder with SKILL.md per skill)
+templates/         Workflow templates (gallery in the Workflows page)
+evals/             Eval suites (Evals page)
 integrations.example.json   MCP apps template (copy to integrations.json)
 apps/server        Hono API, SSE, orchestrator, SDK sessions, SQLite store, observer hooks
 apps/web           React Flow canvas, robot stage, inspector, library pages, costs
@@ -92,6 +98,7 @@ docs/              Design docs (source of truth)
 | 11 | [Claude connection & cost](docs/11-claude-connection-and-cost.md) | API key vs subscription, cost optimisation |
 | 12 | [Local first & deploy](docs/12-local-first-and-deploy.md) | Local setup now, deploy checklist later |
 | 13 | [Stage & OBS](docs/13-stage-and-obs.md) | The animated robot view, second monitor and OBS setup |
+| 14 | [Running on Windows](docs/14-running-on-windows.md) | cmd setup, daily use, troubleshooting |
 
 Reading order: 1 → 2 → 3 → agent specs → 6 → 7 → 11.
 

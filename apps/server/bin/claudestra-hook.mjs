@@ -12,7 +12,7 @@ process.stdin.on("end", async () => {
   try {
     await fetch(`${base}/hooks/${encodeURIComponent(event)}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...(process.env.CLAUDESTRA_HOOKS_SECRET ? { "x-claudestra-secret": process.env.CLAUDESTRA_HOOKS_SECRET } : {}) },
       body: body || "{}",
       signal: AbortSignal.timeout(1500),
     });

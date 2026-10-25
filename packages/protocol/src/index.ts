@@ -103,6 +103,8 @@ export const EventData = z.discriminatedUnion("type", [
       approvalMode: ApprovalMode.default("smart"),
       mode: RunMode.default("dynamic"),
       workflowId: z.string().optional(),
+      origin: z.string().default("user"),
+      createdBy: z.string().optional(),
     }),
   }),
   z.object({ type: z.literal("run.paused"), data: z.object({ by: z.string() }) }),
@@ -134,6 +136,8 @@ export const EventData = z.discriminatedUnion("type", [
   z.object({ type: z.literal("step.approved"), data: z.object({ approvalId: z.string(), by: z.enum(["user", "auto", "rule"]), scope: z.enum(["once", "run"]).default("once"), tool: z.string().default(""), reason: z.string().default("") }) }),
   z.object({ type: z.literal("step.rejected"), data: z.object({ approvalId: z.string(), by: z.string(), note: z.string().default("") }) }),
   z.object({ type: z.literal("skill.loaded"), data: z.object({ name: z.string() }) }),
+  // Cross-run memory handed to the CEO / agents for this run (docs/04 "Context between runs").
+  z.object({ type: z.literal("memory.recalled"), data: z.object({ notes: z.number(), runs: z.array(z.object({ runId: z.string(), prompt: z.string() })) }) }),
 
   z.object({ type: z.literal("tool.called"), data: z.object({ callId: z.string(), tool: z.string(), input: z.unknown() }) }),
   z.object({ type: z.literal("tool.result"), data: z.object({ callId: z.string(), ok: z.boolean(), output: z.string(), truncated: z.boolean() }) }),
@@ -169,7 +173,13 @@ export type RunSummary = {
   status: RunStatus;
   startedAt: string;
   costUsd: number | null;
+  createdBy?: string | null;
+  origin?: string | null;
 };
+
+export const Role = z.enum(["owner", "operator", "viewer"]);
+export type Role = z.infer<typeof Role>;
+export type SessionInfo = { authEnabled: boolean; user: { name: string; role: Role } | null };
 
 export const CreateRunRequest = z.object({
   prompt: z.string().trim().max(20_000).default(""),

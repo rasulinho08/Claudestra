@@ -113,8 +113,11 @@ export class RunStore {
   }
 
   private migrate() {
-    const cols = (this.db.prepare("PRAGMA table_info(steps)").all() as { name: string }[]).map((c) => c.name);
-    if (!cols.includes("model")) this.db.exec("ALTER TABLE steps ADD COLUMN model TEXT");
+    const cols = (table: string) => (this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+    if (!cols("steps").includes("model")) this.db.exec("ALTER TABLE steps ADD COLUMN model TEXT");
+    const runCols = cols("runs");
+    if (!runCols.includes("created_by")) this.db.exec("ALTER TABLE runs ADD COLUMN created_by TEXT");
+    if (!runCols.includes("origin")) this.db.exec("ALTER TABLE runs ADD COLUMN origin TEXT");
   }
 
   // Raw access for the feature modules (workflows, analytics) that share this database.
@@ -138,11 +141,11 @@ export class RunStore {
     return row.total;
   }
 
-  create(summary: Pick<RunSummary, "id" | "prompt" | "source">): RunSummary {
-    const full: RunSummary = { ...summary, status: "running", costUsd: null, startedAt: new Date().toISOString() };
+  create(summary: Pick<RunSummary, "id" | "prompt" | "source"> & { createdBy?: string; origin?: string }): RunSummary {
+    const full: RunSummary = { ...summary, createdBy: summary.createdBy ?? null, origin: summary.origin ?? null, status: "running", costUsd: null, startedAt: new Date().toISOString() };
     this.db
-      .prepare("INSERT OR REPLACE INTO runs (id, prompt, source, status, cost_usd, started_at) VALUES (?, ?, ?, ?, NULL, ?)")
-      .run(full.id, full.prompt, full.source, full.status, full.startedAt);
+      .prepare("INSERT OR REPLACE INTO runs (id, prompt, source, status, cost_usd, started_at, created_by, origin) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)")
+      .run(full.id, full.prompt, full.source, full.status, full.startedAt, full.createdBy ?? null, full.origin ?? null);
     return full;
   }
 
@@ -194,9 +197,9 @@ export class RunStore {
 
   list(limit = 100): RunSummary[] {
     const rows = this.db
-      .prepare("SELECT id, prompt, source, status, cost_usd, started_at FROM runs ORDER BY started_at DESC LIMIT ?")
-      .all(limit) as { id: string; prompt: string; source: RunSummary["source"]; status: RunStatus; cost_usd: number | null; started_at: string }[];
-    return rows.map((r) => ({ id: r.id, prompt: r.prompt, source: r.source, status: r.status, costUsd: r.cost_usd, startedAt: r.started_at }));
+      .prepare("SELECT id, prompt, source, status, cost_usd, started_at, created_by, origin FROM runs ORDER BY started_at DESC LIMIT ?")
+      .all(limit) as { id: string; prompt: string; source: RunSummary["source"]; status: RunStatus; cost_usd: number | null; started_at: string; created_by: string | null; origin: string | null }[];
+    return rows.map((r) => ({ id: r.id, prompt: r.prompt, source: r.source, status: r.status, costUsd: r.cost_usd, startedAt: r.started_at, createdBy: r.created_by, origin: r.origin }));
   }
 
   recordArtifact(a: { id: string; runId: string; stepId: string; title: string; path: string; bytes: number }) {

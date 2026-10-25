@@ -30,13 +30,23 @@
 - Replay scrubber, run history, artifacts browser, diffs.
 - **Done when:** a saved workflow re-runs with new params; any old run replays identically.
 
-## Phase 5 — Polish & v2 ideas (partly done)
+## Phase 5 — Polish & v2 ideas ✅ done
 Done: cost analytics page (per agent, model, day, top steps), daily/monthly budget caps, cost profiles,
 agent and skill editors in the UI, the animated robot Stage for a second monitor / OBS (doc 13),
 single-port production mode (`npm start`).
-Still open:
-- Drag-and-drop workflow editing, triggers (cron/webhook/GitHub events), cross-run memory,
-  multi-user + auth, agent evals (score agents on benchmark tasks), templates marketplace.
+Also done:
+- **Visual workflow editor** (drag agents from a palette, connect nodes, edit tasks and fix loops; positions saved).
+- **Triggers**: cron schedules and webhooks per workflow; GitHub webhooks verified with `X-Hub-Signature-256`,
+  issue/PR title and body become the prompt (`apps/server/src/triggers.ts`, `cron.ts`).
+- **Cross-run memory**: owner notes in every prompt; finished runs remembered and recalled for related requests
+  by keyword overlap, no extra model calls (`memory.ts`, Memory page).
+- **Login and roles**: `AUTH_TOKEN` or users (`npm run user`), roles owner / operator / viewer, HttpOnly cookie,
+  server refuses non-local hosts without login (`access.ts`, Users page).
+- **Evals**: suites in `evals/*.json` with checks (route, answer, files, cost, steps, agents), scored history (`evals.ts`, Evals page).
+- **Templates**: `templates/*.json` gallery, workflow export/import as JSON (a local "marketplace"; a hosted one is out of scope).
+
+Possible next steps: hosted template sharing, Docker sandbox per run for deploy, agent-to-agent chat inside a step,
+memory with embeddings, Slack/Telegram notifications for approvals.
 
 ## Decisions already made
 | Topic | Decision |

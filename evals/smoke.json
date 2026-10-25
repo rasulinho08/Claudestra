@@ -1,0 +1,41 @@
+{
+  "name": "Smoke test",
+  "description": "Three cheap cases: routing, a tiny coding task, and a sourced research answer. Run after changing agent prompts or models.",
+  "profile": "eco",
+  "approvalMode": "auto",
+  "timeoutMinutes": 8,
+  "cases": [
+    {
+      "id": "direct-answer",
+      "prompt": "What is the capital of Japan? One word.",
+      "checks": [
+        { "type": "status", "equals": "completed" },
+        { "type": "route", "equals": "direct" },
+        { "type": "answer_contains", "value": "Tokyo" },
+        { "type": "max_cost", "usd": 0.05 }
+      ]
+    },
+    {
+      "id": "tiny-code",
+      "prompt": "Create add.js exporting a function add(a, b) that returns the sum. No tests, no review.",
+      "checks": [
+        { "type": "status", "equals": "completed" },
+        { "type": "file_exists", "path": "add.js" },
+        { "type": "file_contains", "path": "add.js", "value": "add" },
+        { "type": "agents_include", "agents": ["coder"] },
+        { "type": "max_steps", "n": 3 },
+        { "type": "max_cost", "usd": 0.3 }
+      ]
+    },
+    {
+      "id": "sourced-fact",
+      "prompt": "Find the year the first version of Node.js was released and cite one source URL.",
+      "checks": [
+        { "type": "status", "equals": "completed" },
+        { "type": "answer_contains", "value": "2009" },
+        { "type": "answer_regex", "pattern": "https?://" },
+        { "type": "max_cost", "usd": 0.3 }
+      ]
+    }
+  ]
+}

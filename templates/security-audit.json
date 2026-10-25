@@ -1,0 +1,33 @@
+{
+  "name": "Security audit of pasted code",
+  "description": "Security check, fixes by the coder, re-check.",
+  "params": [
+    {
+      "key": "prompt",
+      "label": "Code or description to audit",
+      "default": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "save",
+      "agent": "coder",
+      "task": "Save the code from the request into files in the workspace exactly as given: {{prompt}}",
+      "dependsOn": [],
+      "successCriteria": "files saved unchanged",
+      "loopBackTo": ""
+    },
+    {
+      "id": "audit",
+      "agent": "security",
+      "task": "Audit the saved code for exploitable issues.",
+      "dependsOn": [
+        "save"
+      ],
+      "successCriteria": "VERDICT line and findings",
+      "loopBackTo": "save"
+    }
+  ],
+  "prompt": "{{prompt}}",
+  "summary": "Security check, fixes by the coder, re-check."
+}
