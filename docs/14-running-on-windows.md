@@ -32,6 +32,17 @@ Open `.env` in Notepad (`notepad .env`) and check at least:
 | `DEFAULT_APPROVAL_MODE` | `smart` to start; `manual` for untrusted tasks (Windows has no OS sandbox) |
 | `DAILY_BUDGET_USD` | e.g. `3`, so a mistake can never cost more than that per day |
 
+## Try it without any AI (demo mode)
+
+No login and no API key needed, nothing is charged. In `.env` set:
+```
+AUTH_MODE=demo
+```
+restart (`Ctrl+C`, `npm run dev`) and send a task such as `make me a basic calculator`. The CEO plans with simple
+keyword rules, agents "work" with placeholder text, call tools through the real approval policy (you will get an
+approval for `npm install`), the reviewer sends the coder back once, real files appear in the Files tab, and the
+robot on the Stage does the whole journey. Switch `AUTH_MODE` back to `claude_cli_login` or `api_key` for real work.
+
 ## Every day
 
 ```cmd

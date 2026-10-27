@@ -16,6 +16,7 @@ import { Access } from "./access.ts";
 import { RunLauncher } from "./runs.ts";
 import { Scheduler, TriggerStore } from "./triggers.ts";
 import { Evals } from "./evals.ts";
+import { demoSession } from "./demo.ts";
 
 const step = (msg: string) => console.log(`[claudestra] ${msg}`);
 const config = loadConfig();
@@ -30,7 +31,7 @@ const memory = new Memory(store, config.memoryEnabled);
 const access = new Access(store, config.authToken);
 const triggers = new TriggerStore(store);
 const interrupted = store.failInterrupted();
-const runner = new Orchestrator(config, store, agents, { skills, integrations, memory });
+const runner = new Orchestrator(config, store, agents, { skills, integrations, memory, runSession: config.authMode === "demo" ? demoSession : undefined });
 const launcher = new RunLauncher(config, store, agents, workflows, runner);
 const evals = new Evals(config.evalsDir, store, launcher, config.workspacesDir);
 evals.onTimeout = (runId) => runner.cancel(runId);

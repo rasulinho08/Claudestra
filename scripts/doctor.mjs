@@ -45,7 +45,7 @@ if (existsSync(envPath)) {
 } else bad(".env missing", "run: copy .env.example .env");
 
 const mode = env.AUTH_MODE || "claude_cli_login";
-const modes = ["api_key", "claude_cli_login", "observer", "bedrock", "vertex"];
+const modes = ["api_key", "claude_cli_login", "observer", "bedrock", "vertex", "demo"];
 if (modes.includes(mode)) ok(`AUTH_MODE=${mode}`);
 else bad(`AUTH_MODE=${mode} is not valid`, `use one of: ${modes.join(", ")}`);
 if (mode === "api_key" && !env.ANTHROPIC_API_KEY) bad("AUTH_MODE=api_key but ANTHROPIC_API_KEY is empty", "paste your key into .env or use AUTH_MODE=claude_cli_login");

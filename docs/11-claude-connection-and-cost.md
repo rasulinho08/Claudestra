@@ -41,6 +41,7 @@ the model is always one of the four ways below.
 | B | `claude_cli_login` | Claude Code CLI logged in with your Claude account | Starting locally without an API key | No |
 | C | `observer` | Claude Code logged in; hooks send events to Claudestra | Watching your normal Claude Code sessions as a graph | No |
 | D | `bedrock` / `vertex` | Cloud credentials | Companies on AWS/GCP | Yes |
+| E | `demo` | Nothing | Trying the UI: simulated agents, no AI calls, $0 (`apps/server/src/demo.ts`) | No |
 
 **A. API key**
 1. Create an account at the Anthropic Console, add a small prepaid balance, and create an API key.

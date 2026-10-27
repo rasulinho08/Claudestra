@@ -26,6 +26,8 @@ export function resolveSdkAuth(mode: AuthMode, env: NodeJS.ProcessEnv): SdkAuth 
       return { ok: true, env: { ...base, CLAUDE_CODE_USE_BEDROCK: "1" } };
     case "vertex":
       return { ok: true, env: { ...base, CLAUDE_CODE_USE_VERTEX: "1" } };
+    case "demo":
+      return { ok: true, env: base, warning: "Demo mode: agents are simulated, no AI is called and nothing is charged. Set AUTH_MODE in .env to use Claude." };
     case "observer":
       return {
         ok: false,
