@@ -16,7 +16,8 @@
     "user": "npm run user -w @claudestra/server --",
     "doctor": "node scripts/doctor.mjs",
     "server": "npm run start -w @claudestra/server",
-    "dev:watch": "concurrently -n server,web -c blue,magenta \"npm run dev:watch -w @claudestra/server\" \"npm run dev -w @claudestra/web\""
+    "dev:watch": "concurrently -n server,web -c blue,magenta \"npm run dev:watch -w @claudestra/server\" \"npm run dev -w @claudestra/web\"",
+    "demo": "concurrently -n server,web -c blue,magenta \"npm run demo -w @claudestra/server\" \"npm run dev -w @claudestra/web\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

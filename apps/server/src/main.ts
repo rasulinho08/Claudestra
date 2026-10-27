@@ -13,6 +13,12 @@ if (major < 22 || (major === 22 && minor < 13)) {
   process.exit(1);
 }
 
+// `npm run demo` passes --demo: simulated agents regardless of .env (values already in the environment win over .env).
+if (process.argv.includes("--demo")) {
+  process.env.AUTH_MODE = "demo";
+  log("demo mode (--demo): simulated agents, no AI, $0");
+}
+
 const envFile = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../.env");
 if (existsSync(envFile)) {
   try {
