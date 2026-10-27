@@ -26,6 +26,15 @@ export function resolveSdkAuth(mode: AuthMode, env: NodeJS.ProcessEnv): SdkAuth 
       return { ok: true, env: { ...base, CLAUDE_CODE_USE_BEDROCK: "1" } };
     case "vertex":
       return { ok: true, env: { ...base, CLAUDE_CODE_USE_VERTEX: "1" } };
+    case "gemini":
+      if (!env.GEMINI_API_KEY && !env.GOOGLE_API_KEY) {
+        return { ok: false, reason: "AUTH_MODE=gemini but GEMINI_API_KEY is not set in .env (get a free key at aistudio.google.com)" };
+      }
+      return {
+        ok: true,
+        env: base,
+        warning: "Using Google Gemini. Agents use Claudestra's own tools (files, Bash, web); skills and MCP apps are not available in this mode.",
+      };
     case "demo":
       return { ok: true, env: base, warning: "Demo mode: agents are simulated, no AI is called and nothing is charged. Set AUTH_MODE in .env to use Claude." };
     case "observer":

@@ -43,6 +43,21 @@ keyword rules, agents "work" with placeholder text, call tools through the real 
 approval for `npm install`), the reviewer sends the coder back once, real files appear in the Files tab, and the
 robot on the Stage does the whole journey. Switch `AUTH_MODE` back to `claude_cli_login` or `api_key` for real work.
 
+## Real AI for free: Google Gemini
+
+1. Open **aistudio.google.com** with your Google account → **Get API key** → **Create API key**, copy it.
+2. `notepad .env` and set:
+   ```
+   AUTH_MODE=gemini
+   GEMINI_API_KEY=paste-your-key-here
+   ```
+3. `Ctrl+C`, then `npm run dev` (not `npm run demo`). The badge at the top shows `gemini`.
+
+Notes: the free tier allows only a few requests per minute, so prefer the **eco** profile and small tasks; when it is
+busy Claudestra waits and retries automatically. Agents use Claudestra's own file/Bash/web tools; skills and MCP apps
+work only with Claude. If a model name stops working, set `GEMINI_MODEL_STRONG`, `GEMINI_MODEL_MID`, `GEMINI_MODEL_CHEAP`
+in `.env` to current ids from ai.google.dev/gemini-api/docs/models.
+
 ## Every day
 
 ```cmd

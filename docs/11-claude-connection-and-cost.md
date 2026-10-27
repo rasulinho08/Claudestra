@@ -41,6 +41,7 @@ the model is always one of the four ways below.
 | B | `claude_cli_login` | Claude Code CLI logged in with your Claude account | Starting locally without an API key | No |
 | C | `observer` | Claude Code logged in; hooks send events to Claudestra | Watching your normal Claude Code sessions as a graph | No |
 | D | `bedrock` / `vertex` | Cloud credentials | Companies on AWS/GCP | Yes |
+| F | `gemini` | `GEMINI_API_KEY` (free tier at aistudio.google.com) | Real AI without a Claude account; Claudestra's own tools (Read/Write/Edit/Glob/Grep/Bash/WebFetch/WebSearch), no skills or MCP (`apps/server/src/gemini.ts`, `local-tools.ts`) | Yes (with login) |
 | E | `demo` | Nothing | Trying the UI: simulated agents, no AI calls, $0 (`apps/server/src/demo.ts`) | No |
 
 **A. API key**

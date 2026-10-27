@@ -6,7 +6,8 @@ Local first, deploy later.
 
 > Status: **all phases (0–5) implemented**: 11-agent company, approval modes, coder⇄reviewer loops, skills, MCP apps, workflows with a visual editor, triggers (schedule, webhook, GitHub), cross-run memory, login with roles, evals, templates, replay, cost analytics, and the animated robot **Stage** for a second monitor or OBS.
 
-**No AI yet?** Run `npm run demo` (or set `AUTH_MODE=demo` in `.env`) to try every screen with simulated agents ($0).
+**No Claude account?** Use Google Gemini's free API: `AUTH_MODE=gemini` + `GEMINI_API_KEY` (docs/14).
+**No AI at all?** Run `npm run demo` (or set `AUTH_MODE=demo` in `.env`) to try every screen with simulated agents ($0).
 
 **Windows:** step-by-step cmd instructions are in [docs/14-running-on-windows.md](docs/14-running-on-windows.md). Problems? `npm run doctor`.
 
