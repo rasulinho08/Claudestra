@@ -18,6 +18,8 @@ export type StepView = {
   task: string;
   status: StepStatus;
   model?: string;
+  // Which credential the engine used (SDK apiKeySource): "ANTHROPIC_API_KEY", "none" (claude.ai login), "gemini", "demo".
+  authSource?: string;
   items: TimelineItem[];
   usage: Usage;
   costUsd: number | null;
@@ -182,7 +184,7 @@ export function reduceRun(state: RunView, event: ClaudestraEvent): RunView {
       updateStep(next, stepId!, (s) => ({ status: s.status === "pending" ? "ready" : s.status, task: event.data.task || s.task }));
       break;
     case "step.started":
-      updateStep(next, stepId!, (s) => ({ status: "running", task: s.task || event.data.task, model: event.data.model, startedAt: event.ts }));
+      updateStep(next, stepId!, (s) => ({ status: "running", task: s.task || event.data.task, model: event.data.model, authSource: event.data.apiKeySource ?? s.authSource, startedAt: event.ts }));
       break;
     case "step.message": {
       const { messageId, text, partial, role } = event.data;

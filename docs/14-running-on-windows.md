@@ -43,6 +43,37 @@ keyword rules, agents "work" with placeholder text, call tools through the real 
 approval for `npm install`), the reviewer sends the coder back once, real files appear in the Files tab, and the
 robot on the Stage does the whole journey. Switch `AUTH_MODE` back to `claude_cli_login` or `api_key` for real work.
 
+## Claude with an API key (and the Max plan's monthly API credits)
+
+`AUTH_MODE=api_key` is the officially recommended way to run Agent SDK apps, needs no Claude Code login, and every
+Claudestra feature works with it. Since 7 October 2026 the **Max plan includes $100 a month of Claude API credits**
+(Ultra, formerly Max 20x: $200), with no card needed, and they cover exactly this kind of use (Agent SDK with an API
+key from the linked Console organization). Sources: support.claude.com/en/articles/17154008,
+platform.claude.com/docs/en/about-claude/api-credits-for-subscribers.
+
+1. Sign in to **claude.ai in a web browser** as the Max subscriber → **Settings → Billing → API credits → Link
+   organization** (you can create the Console organization in that flow; you need 7 days on the plan). Only one
+   organization can be linked. On a company **Team** plan only the Team Owner can claim; **Enterprise** gets no credits
+   (ask the company admin to invite you to the company's Console organization with the Developer role instead).
+2. In the Console (**platform.claude.com/settings/keys**, the old console.anthropic.com redirects there) → **Create
+   key**: pick the linked organization's workspace (a key not scoped to one workspace is rejected), and expiry
+   **Never** or long (it cannot be changed later; an expired key stops Claudestra).
+3. `notepad .env`:
+   ```
+   AUTH_MODE=api_key
+   ANTHROPIC_API_KEY=sk-ant-...
+   ```
+   Keep the key **only in `.env`**, not as a Windows environment variable: otherwise the normal `claude` command would
+   also use the key, and the Max credits do not cover interactive Claude Code ("Credit balance too low").
+4. `Ctrl+C`, `npm run dev`. In a run, click a step: the Inspector shows **auth: API key**.
+5. Recommended: set a monthly **spend limit** on the Console Billing page. Claudestra's `DAILY_BUDGET_USD` and run
+   budgets are estimates, not a hard billing cap.
+
+Good to know: credits refresh each billing cycle and do not roll over; when they run out, requests stop (nothing is
+charged unless you buy credits or turn on auto-reload). WebSearch is billed extra ($10 per 1,000 searches). Signing in to
+claude.ai and the Console works only with **Continue with Google** or an emailed link (no passwords), so you need one of
+those to claim the credits or create a key.
+
 ## Real AI for free: Google Gemini
 
 1. Open **aistudio.google.com** with your Google account → **Get API key** → **Create API key**, copy it.
@@ -106,7 +137,7 @@ you to **Authorize**: no email code is needed. Click it and return to cmd.
 - Browser did not open: cmd shows a long URL; copy it into the browser where you are logged in to claude.ai.
 - The page asks for a code from your email: you are not logged in in that browser. Use the browser/profile where
   claude.ai is open, or "Continue with Google" if your account uses Google.
-- No way to log in right now: use `AUTH_MODE=api_key` with a key from console.anthropic.com (that also needs a login),
+- No way to log in right now: use `AUTH_MODE=api_key` with a key from platform.claude.com/settings/keys (that also needs a login),
   or wait until you have email access.
 - Check: run `claude`; if it opens a chat prompt without asking to log in, you are logged in (type `/exit`).
 

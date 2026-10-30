@@ -8,6 +8,16 @@ import { seconds, tokens, usd } from "./format.ts";
 import { api, errorText } from "./api.ts";
 import { go } from "./router.ts";
 
+// SDK apiKeySource values → readable labels ("none" means the claude.ai login, not "no auth").
+const AUTH_LABEL: Record<string, string> = {
+  ANTHROPIC_API_KEY: "API key",
+  none: "Claude login",
+  "/login managed key": "Console login key",
+  apiKeyHelper: "API key helper",
+  gemini: "Gemini key",
+  demo: "demo",
+};
+
 export type Selection = { kind: "step"; id: string } | { kind: "edge"; from: string; to: string } | { kind: "answer" } | { kind: "files" } | null;
 
 type Props = { run: RunView; runId: string; selection: Selection; onSelect: (s: Selection) => void; onDecide: Decide };
@@ -108,6 +118,7 @@ function body(run: RunView, runId: string, selection: Selection, onDecide: Decid
       </h3>
       <div className="insp-meta small muted">
         {step.model && <span>{step.model}</span>}
+        {step.authSource && <span title="Credential the engine used for this step">auth: {AUTH_LABEL[step.authSource] ?? step.authSource}</span>}
         <span>
           ⬆ {tokens(step.usage.inputTokens)} ⬇ {tokens(step.usage.outputTokens)} ⟳ {tokens(step.usage.cacheReadTokens)}
         </span>

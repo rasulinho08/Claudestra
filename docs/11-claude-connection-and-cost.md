@@ -83,6 +83,10 @@ Claudestra, which draws the graph.
    The agents' definitions from `docs/agents/` can still be exported as Claude Code subagents (`.claude/agents/*.md`)
    so the same team is used.
 
+**Max / Ultra / Team subscribers (since 7 Oct 2026):** the plan includes monthly Claude API credits (Max $100, Ultra $200,
+Team pooled up to $500) that can be linked to one Console organization without a card and cover Agent SDK use with an
+API key from that organization, i.e. `api_key` mode. Setup steps: docs/14 "Claude with an API key".
+
 **Recommended path:** start with **B** (or **C**) locally, switch to **A** before deploying (doc 12).
 All modes feed the same event stream, so the UI does not change.
 
