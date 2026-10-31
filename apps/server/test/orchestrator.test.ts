@@ -327,3 +327,17 @@ test("workflow plan skips CEO planning", async () => {
   assert.deepEqual(log.map((r) => r.agent.info.id), ["coder", "ceo"]);
   assert.equal(store.status("r"), "completed");
 });
+
+test("an invalid plan goes back to the CEO once with the error, then the run continues", async () => {
+  let plans = 0;
+  const bad = { ...coderOnly, steps: [{ id: "s1", agent: "ghost", task: "t", dependsOn: [], successCriteria: "", loopBackTo: "" }] };
+  const { store, log, start } = setup({
+    "ceo:plan": () => ({ structured: ++plans === 1 ? bad : coderOnly }),
+    "ceo:final": () => ({ text: "ok" }),
+  });
+  await start("x");
+  assert.equal(store.status("r"), "completed");
+  assert.equal(plans, 2);
+  assert.match(log[1]!.prompt, /rejected: step s1 uses unknown agent "ghost"/);
+  assert.ok(store.events("r").some((e) => e.type === "step.message" && /asking the CEO to fix it/.test(e.data.text)));
+});

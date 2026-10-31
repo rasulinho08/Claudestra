@@ -192,23 +192,31 @@ export class Orchestrator {
     if (suppliedPlan) {
       plan = validatePlan({ ...suppliedPlan, directAnswer: "" }, roster, Math.max(suppliedPlan.steps.length, 1));
     } else {
-      const planOutcome = await this.runStep(
-        ctx,
-        CEO_PLAN_STEP,
-        ceo,
-        "Plan the work",
-        buildPlanningPrompt(ctx.prompt, roster, ctx.profile.planSizeCap, ctx.profile.budgetUsd, planningContext),
-        { outputSchema: ceoDecisionSchema, budgetUsd: Math.min(ceo.limits.maxBudgetUsd, ctx.profile.budgetUsd) },
-      );
-      if (!this.running(ctx)) return;
-      if (!planOutcome.ok) throw new Error(`CEO planning failed: ${planOutcome.error ?? "unknown error"}`);
-      try {
-        const raw = planOutcome.structured ?? extractJson(planOutcome.text);
-        plan = validatePlan(raw, roster, ctx.profile.planSizeCap);
-        directAnswer = (raw as { directAnswer?: string }).directAnswer ?? "";
-      } catch (err) {
-        throw new Error(`CEO returned an invalid plan: ${err instanceof Error ? err.message : String(err)}`);
+      const planningPrompt = buildPlanningPrompt(ctx.prompt, roster, ctx.profile.planSizeCap, ctx.profile.budgetUsd, planningContext);
+      const planBudget = Math.min(ceo.limits.maxBudgetUsd, ctx.profile.budgetUsd);
+      let prompt = planningPrompt;
+      let parsed: { plan: Plan; directAnswer: string } | null = null;
+      // A plan that fails validation goes back to the CEO once with the exact error (cheap, and common on non-Claude models).
+      for (let attempt = 1; attempt <= 2 && !parsed; attempt++) {
+        const planOutcome = await this.runStep(ctx, CEO_PLAN_STEP, ceo, attempt === 1 ? "Plan the work" : "Fix the plan", prompt, {
+          outputSchema: ceoDecisionSchema,
+          budgetUsd: planBudget,
+          announce: attempt === 1,
+        });
+        if (!this.running(ctx)) return;
+        if (!planOutcome.ok) throw new Error(`CEO planning failed: ${planOutcome.error ?? "unknown error"}`);
+        try {
+          const raw = planOutcome.structured ?? extractJson(planOutcome.text);
+          parsed = { plan: validatePlan(raw, roster, ctx.profile.planSizeCap), directAnswer: (raw as { directAnswer?: string }).directAnswer ?? "" };
+        } catch (err) {
+          const problem = err instanceof Error ? err.message : String(err);
+          if (attempt === 2) throw new Error(`CEO returned an invalid plan twice: ${problem}`);
+          this.emitStep(ctx, CEO_PLAN_STEP, ceo.info.id, { type: "step.message", data: { messageId: randomUUID(), role: "system", partial: false, text: `Plan was invalid (${problem}); asking the CEO to fix it.` } });
+          prompt = `${planningPrompt}\n\nYour previous reply was rejected: ${problem}\nPrevious reply:\n${(planOutcome.text || JSON.stringify(planOutcome.structured ?? "")).slice(0, 4000)}\n\nReturn a corrected JSON decision that fixes exactly this problem.`;
+        }
       }
+      plan = parsed!.plan;
+      directAnswer = parsed!.directAnswer;
     }
     this.emitRun(ctx, { type: "plan.created", data: { plan } });
 
