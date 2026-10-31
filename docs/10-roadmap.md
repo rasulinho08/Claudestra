@@ -74,6 +74,8 @@ memory with embeddings, Slack/Telegram notifications for approvals.
   Designer/Translator/Marketer (docs/03), quota-aware waiting (`quota.ts`: shared cool-down, `*_RPM` pacing,
   `QUOTA_MAX_WAIT_SEC`), provider presets for `openai_compat` (`OPENAI_PROVIDER`: openrouter, groq, deepseek, ollama,
   lmstudio; local models run one step at a time).
+- Wave 2: Projects (`projects.ts`: copy in, baseline, changes, apply with snapshot, undo; docs/04 "Projects") and the
+  HQ home page (`GET /api/hq`, `HqPage.tsx`; docs/07 "HQ").
 
 ## Open questions
 1. **Primary use case** to optimise first: software building, research reports, or business analysis? (Default assumption: software building.)

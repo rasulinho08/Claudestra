@@ -20,6 +20,7 @@ import { demoSession } from "./demo.ts";
 import { geminiSession } from "./gemini.ts";
 import { compatSession } from "./openai-compat.ts";
 import { PreviewTokens, startPreviewServer } from "./preview.ts";
+import { Projects } from "./projects.ts";
 
 const step = (msg: string) => console.log(`[claudestra] ${msg}`);
 const config = loadConfig();
@@ -35,7 +36,8 @@ const access = new Access(store, config.authToken);
 const triggers = new TriggerStore(store);
 const interrupted = store.failInterrupted();
 const runner = new Orchestrator(config, store, agents, { skills, integrations, memory, runSession: config.authMode === "demo" ? demoSession : config.authMode === "gemini" ? geminiSession : config.authMode === "meta" || config.authMode === "openai_compat" ? compatSession : undefined });
-const launcher = new RunLauncher(config, store, agents, workflows, runner);
+const projects = new Projects(store, config.projectsDir, config.snapshotsDir, config.workspacesDir, ["127.0.0.1", "localhost", "::1"].includes(config.host));
+const launcher = new RunLauncher(config, store, agents, workflows, runner, projects);
 const evals = new Evals(config.evalsDir, store, launcher, config.workspacesDir);
 evals.onTimeout = (runId) => runner.cancel(runId);
 
@@ -59,7 +61,7 @@ if (config.previewPort) {
   }
 }
 
-const app = createApp({ previewRunning: () => previewRunning, previewTokens, config, store, agents, runner, skills, integrations, workflows, memory, access, triggers, evals, launcher, templatesDir: config.templatesDir, hooksSecret: config.hooksSecret });
+const app = createApp({ previewRunning: () => previewRunning, previewTokens, projects, config, store, agents, runner, skills, integrations, workflows, memory, access, triggers, evals, launcher, templatesDir: config.templatesDir, hooksSecret: config.hooksSecret });
 const scheduler = new Scheduler(triggers, (t, params) =>
   launcher.start({ prompt: params.prompt ?? "", workflowId: t.workflowId, params, profile: t.profile, approvalMode: t.approvalMode, origin: `trigger:${t.id}`, createdBy: t.name || "schedule" }).runId,
 );

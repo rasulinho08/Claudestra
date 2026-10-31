@@ -6,7 +6,7 @@ export type Route = { page: string; params: URLSearchParams };
 function parse(): Route {
   const raw = window.location.hash.replace(/^#\/?/, "");
   const [page = "", query = ""] = raw.split("?");
-  return { page: page || "runs", params: new URLSearchParams(query) };
+  return { page: page || "hq", params: new URLSearchParams(query) };
 }
 
 export function useRoute(): Route {

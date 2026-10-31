@@ -35,6 +35,14 @@ approvals(id PK, run_id FK, step_id FK, kind, request JSON, decision NULL, decid
 `runs`, `steps`, `events`, `artifacts` exist (see `apps/server/src/store.ts`); agents are read from `agents/*.md`
 instead of a table, and settings come from `.env`. The remaining tables arrive with their phases.
 
+## Added with the upgrade waves
+```sql
+projects(id PK, name, folder NULL /* linked real folder; NULL = projects/<id> */, created_at, updated_at)
+project_runs(run_id PK, project_id, applied_at NULL, undone_at NULL, applied JSON /* paths */)
+run_exports(run_id, repo, url, commit_sha, at)          -- "Push to GitHub" history
+users(id PK, name UNIQUE, role, token_hash UNIQUE, created_at, last_seen)
+```
+
 ## Notes
 - `events` is the source of truth; `runs`/`steps` are projections kept for fast lists and filters.
 - Large content (tool outputs, diffs, files) lives on disk under `workspaces/<runId>/` or in `artifacts.path`; DB rows hold references.

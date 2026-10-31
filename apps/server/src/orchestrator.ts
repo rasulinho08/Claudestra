@@ -52,6 +52,8 @@ export type StartOptions = {
   // Saved workflow plan: skips CEO planning (docs/04 "Workflow").
   plan?: Plan;
   language?: AnswerLanguage;
+  // Context for agents when the run continues a project (projects.ts prepareRun).
+  projectNote?: string;
 };
 
 const LANGUAGE_NAMES: Record<Exclude<AnswerLanguage, "auto">, string> = { az: "Azerbaijani", en: "English", ru: "Russian", tr: "Turkish" };
@@ -86,6 +88,7 @@ type RunContext = {
   // Owner notes from memory, added to every step prompt.
   notes: string;
   language: AnswerLanguage;
+  projectNote: string;
 };
 
 type StepResult = StepReport & { decision?: "continue" | "finish" };
@@ -136,6 +139,7 @@ export class Orchestrator {
       startedAt: Date.now(),
       notes: "",
       language: opts.language ?? "auto",
+      projectNote: opts.projectNote ?? "",
     };
     this.runs.set(runId, ctx);
     try {
@@ -192,7 +196,7 @@ export class Orchestrator {
 
     // 0. Memory: owner notes for everyone, related earlier runs for the CEO.
     const memory = this.deps.memory;
-    ctx.notes = [memory?.notesBlock() ?? "", languageRule(ctx.language)].filter(Boolean).join("\n\n");
+    ctx.notes = [memory?.notesBlock() ?? "", ctx.projectNote, languageRule(ctx.language)].filter(Boolean).join("\n\n");
     const recalled = memory && !suppliedPlan ? memory.recall(ctx.prompt) : [];
     if (ctx.notes || recalled.length > 0) {
       this.emitRun(ctx, { type: "memory.recalled", data: { notes: memory?.notes().length ?? 0, runs: recalled.map((r) => ({ runId: r.runId, prompt: r.prompt.slice(0, 200) })) } });

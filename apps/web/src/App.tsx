@@ -12,10 +12,12 @@ import { MemoryPage } from "./pages/MemoryPage.tsx";
 import { EvalsPage } from "./pages/EvalsPage.tsx";
 import { UsersPage } from "./pages/UsersPage.tsx";
 import { LoginPage } from "./pages/LoginPage.tsx";
+import { HqPage } from "./pages/HqPage.tsx";
+import { ProjectsPage } from "./pages/ProjectsPage.tsx";
 import { api } from "./api.ts";
 import { lang, setLang, t } from "./i18n.ts";
 
-const NAV = ["runs", "workflows", "agents", "skills", "apps", "memory", "evals", "costs", "users"] as const;
+const NAV = ["hq", "runs", "projects", "workflows", "agents", "skills", "apps", "memory", "evals", "costs", "users"] as const;
 
 export function App() {
   const route = useRoute();
@@ -74,7 +76,11 @@ export function App() {
       </header>
       {(health?.warning || error) && <div className="banner">{error ?? health?.warning}</div>}
       <div className="page">
-        {route.page === "agents" ? (
+        {route.page === "hq" ? (
+          <HqPage />
+        ) : route.page === "projects" ? (
+          <ProjectsPage key={route.params.get("id") ?? ""} initial={route.params.get("id")} />
+        ) : route.page === "agents" ? (
           <AgentsPage />
         ) : route.page === "skills" ? (
           <SkillsPage />
@@ -91,7 +97,7 @@ export function App() {
         ) : route.page === "users" ? (
           <UsersPage authEnabled={Boolean(session?.authEnabled)} />
         ) : (
-          <RunsPage health={health} initialRun={route.params.get("run")} />
+          <RunsPage health={health} initialRun={route.params.get("run")} initialProject={route.params.get("project")} />
         )}
       </div>
     </div>

@@ -66,7 +66,8 @@ const OPERATOR_WRITES = [/^\/api\/runs(\/|$)/, /^\/api\/evals\/[^/]+\/run$/];
 export function requiredRole(method: string, path: string): Role {
   if (method === "GET" || method === "HEAD") return "viewer";
   // Uses the owner's GitHub token or this computer's file manager.
-  if (/^\/api\/runs\/[^/]+\/(github|open-folder)$/.test(path)) return "owner";
+  // Writes outside Claudestra's own folders: the owner's GitHub token, this PC's file manager, a project folder.
+  if (/^\/api\/runs\/[^/]+\/(github|open-folder|apply|undo-apply)$/.test(path)) return "owner";
   if (OPERATOR_WRITES.some((re) => re.test(path))) return "operator";
   return "owner";
 }

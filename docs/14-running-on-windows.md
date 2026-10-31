@@ -124,6 +124,15 @@ busy Claudestra waits and retries automatically. Agents use Claudestra's own fil
 work only with Claude. If a model name stops working, set `GEMINI_MODEL_STRONG`, `GEMINI_MODEL_MID`, `GEMINI_MODEL_CHEAP`
 in `.env` to current ids from ai.google.dev/gemini-api/docs/models.
 
+## Keep working on the same files: projects
+
+**Layihələr / Projects** → **+ New project**. Give it a name, and either leave the folder empty (Claudestra keeps the
+files) or paste the full path of a folder you already have, e.g. `C:\Users\User\Documents\my-site`. Then
+**New task in this project** (or pick the project in the box next to *Send*). The agents work on a copy; when the task
+is done, click **Changes** in the top bar of the task, look at the diff, untick what you do not want and press
+**Apply**. **Undo** puts the previous files back. Files that you changed yourself in the meantime are marked
+*conflict* and are not overwritten unless you confirm.
+
 ## Where the results are
 
 Each task writes its files into `Claudestra\workspaces\<run id>\` (the id is in the address bar after `run=`).

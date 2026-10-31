@@ -21,6 +21,8 @@ import { createZip } from "./zip.ts";
 import { GitHubError, exportToGitHub, repoSlug } from "./github-export.ts";
 import { SkillImportError, importSkill } from "./skill-import.ts";
 import type { PreviewTokens } from "./preview.ts";
+import { ProjectError, Projects } from "./projects.ts";
+import { startOfDay, startOfMonth } from "./analytics.ts";
 import { HttpError, RunLauncher } from "./runs.ts";
 import { Memory } from "./memory.ts";
 import { Access, allows, requiredRole, safeEqual, tokenFrom } from "./access.ts";
@@ -53,6 +55,7 @@ export type Services = {
   // Whether the "Try it" preview server is listening (index.ts); tests leave it off.
   previewRunning?: () => boolean;
   previewTokens?: PreviewTokens;
+  projects?: Projects;
   // Opens a folder in the OS file manager; replaceable in tests.
   openFolder?: (dir: string) => void;
 };
@@ -123,7 +126,9 @@ export function createApp(s: Services) {
   const memory = s.memory ?? new Memory(store);
   const access = s.access ?? new Access(store, null);
   const triggers = s.triggers ?? new TriggerStore(store);
-  const launcher = s.launcher ?? new RunLauncher(config, store, agents, workflows, runner);
+  const loopbackServer = ["127.0.0.1", "localhost", "::1"].includes(config.host);
+  const projects = s.projects ?? new Projects(store, config.projectsDir, config.snapshotsDir, config.workspacesDir, loopbackServer);
+  const launcher = s.launcher ?? new RunLauncher(config, store, agents, workflows, runner, projects);
   const evals = s.evals ?? new Evals(path.join(config.agentsDir, "../evals"), store, launcher, config.workspacesDir);
   const templatesDir = s.templatesDir ?? path.join(config.agentsDir, "../templates");
   const app = new Hono<Env>();
@@ -384,6 +389,125 @@ export function createApp(s: Services) {
     } catch (err) {
       return fail(c, err);
     }
+  });
+
+  // ---- projects (upgrade A3) ----------------------------------------------------------------
+
+  const projectFail = (c: Context, err: unknown) => (err instanceof ProjectError ? c.json({ error: err.message }, err.status) : fail(c, err));
+
+  app.get("/api/projects", (c) => c.json({ projects: projects.list(), canLinkFolders: loopbackServer }));
+
+  app.post("/api/projects", async (c) => {
+    const parsed = z.object({ name: z.string().min(1).max(80), folder: z.string().max(500).optional() }).safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    try {
+      return c.json(projects.create(parsed.data.name, parsed.data.folder), 201);
+    } catch (err) {
+      return projectFail(c, err);
+    }
+  });
+
+  app.get("/api/projects/:id", (c) => {
+    const p = projects.get(c.req.param("id"));
+    if (!p) return c.json({ error: "project not found" }, 404);
+    try {
+      return c.json({ ...p, exists: existsSync(p.path), files: projects.files(p.id), runs: projects.runs(p.id) });
+    } catch (err) {
+      return projectFail(c, err);
+    }
+  });
+
+  app.delete("/api/projects/:id", (c) => {
+    try {
+      projects.remove(c.req.param("id"), c.req.query("deleteFiles") === "1");
+      return c.json({ ok: true });
+    } catch (err) {
+      return projectFail(c, err);
+    }
+  });
+
+  app.get("/api/runs/:id/changes", (c) => {
+    const id = c.req.param("id");
+    if (!store.has(id)) return c.json({ error: "run not found" }, 404);
+    try {
+      const p = projects.projectOf(id);
+      const row = store.database.prepare("SELECT applied_at, undone_at FROM project_runs WHERE run_id = ?").get(id) as { applied_at: string | null; undone_at: string | null } | undefined;
+      return c.json({ project: p ? { id: p.id, name: p.name, path: p.path } : null, appliedAt: row?.applied_at ?? null, undoneAt: row?.undone_at ?? null, changes: projects.changes(id) });
+    } catch (err) {
+      return projectFail(c, err);
+    }
+  });
+
+  app.post("/api/runs/:id/apply", async (c) => {
+    const id = c.req.param("id");
+    if (!store.has(id)) return c.json({ error: "run not found" }, 404);
+    if (store.status(id) === "running") return c.json({ error: "wait until the run has finished" }, 409);
+    const parsed = z.object({ paths: z.array(z.string()).max(5000).optional(), force: z.boolean().default(false) }).safeParse((await body(c)) ?? {});
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    try {
+      const r = projects.apply(id, parsed.data);
+      const p = projects.projectOf(id)!;
+      store.append(id, { type: "project.applied", data: { projectId: p.id, applied: r.applied.length, skipped: r.skipped.length, undone: false } });
+      return c.json(r);
+    } catch (err) {
+      return projectFail(c, err);
+    }
+  });
+
+  app.post("/api/runs/:id/undo-apply", (c) => {
+    const id = c.req.param("id");
+    if (!store.has(id)) return c.json({ error: "run not found" }, 404);
+    try {
+      const r = projects.undo(id);
+      const p = projects.projectOf(id)!;
+      store.append(id, { type: "project.applied", data: { projectId: p.id, applied: r.restored, skipped: 0, undone: true } });
+      return c.json(r);
+    } catch (err) {
+      return projectFail(c, err);
+    }
+  });
+
+  // ---- HQ home page (upgrade V4): one call with what the owner needs to see first ------------
+
+  app.get("/api/hq", (c) => {
+    const running = store.list(200).filter((r) => r.status === "running");
+    const activeSteps = running.length
+      ? (store.database
+          .prepare(`SELECT run_id, step_id, agent_id, task, status FROM steps WHERE status IN ('running', 'waiting_approval') AND run_id IN (${running.map(() => "?").join(",")})`)
+          .all(...running.map((r) => r.id)) as { run_id: string; step_id: string; agent_id: string | null; task: string | null; status: string }[])
+      : [];
+    const approvals = (
+      store.database
+        .prepare("SELECT a.id, a.run_id, a.step_id, a.kind, a.request, a.created_at, r.prompt, s.agent_id FROM approvals a JOIN runs r ON r.id = a.run_id LEFT JOIN steps s ON s.run_id = a.run_id AND s.step_id = a.step_id WHERE a.decision IS NULL AND r.status = 'running' ORDER BY a.created_at")
+        .all() as { id: string; run_id: string; step_id: string | null; kind: string; request: string; created_at: string; prompt: string; agent_id: string | null }[]
+    ).map((a) => {
+      let request: { tool?: string; input?: unknown; reason?: string } = {};
+      try {
+        request = JSON.parse(a.request);
+      } catch {
+        // keep empty
+      }
+      return { approvalId: a.id, runId: a.run_id, stepId: a.step_id, kind: a.kind, agentId: a.agent_id ?? (a.kind === "plan" ? "ceo" : null), prompt: a.prompt, tool: request.tool ?? null, input: request.input ?? null, reason: request.reason ?? "", createdAt: a.created_at };
+    });
+    const busy = new Map<string, { runId: string; task: string }>();
+    for (const st of activeSteps) if (st.agent_id && !busy.has(st.agent_id)) busy.set(st.agent_id, { runId: st.run_id, task: st.task ?? "" });
+    const wfName = (id: string) => workflows.get(id)?.name ?? id;
+    const upcoming = triggers
+      .list()
+      .filter((t) => t.enabled && t.nextRunAt)
+      .sort((a, b) => (a.nextRunAt! < b.nextRunAt! ? -1 : 1))
+      .slice(0, 5)
+      .map((t) => ({ id: t.id, name: t.name || wfName(t.workflowId), workflow: wfName(t.workflowId), nextRunAt: t.nextRunAt }));
+    return c.json({
+      authMode: config.authMode,
+      running: running.map((r) => ({ ...r, active: activeSteps.filter((st) => st.run_id === r.id).map((st) => ({ stepId: st.step_id, agentId: st.agent_id, status: st.status })) })),
+      approvals,
+      recent: store.list(8),
+      upcoming,
+      spend: { today: store.spentSince(startOfDay()), month: store.spentSince(startOfMonth()), dailyCap: config.dailyBudgetUsd, monthlyCap: config.monthlyBudgetUsd },
+      projects: projects.list().slice(0, 5),
+      team: agents.all().map((a) => ({ ...a.info, skills: a.skills.length, busy: busy.get(a.info.id) ?? null })),
+    });
   });
 
   // ---- agents, skills, integrations -------------------------------------------------------

@@ -4,6 +4,8 @@ node_modules/
 !.env.example
 dist/
 workspaces/
+projects/
+data/snapshots/
 data/*.db
 data/*.db-*
 .DS_Store

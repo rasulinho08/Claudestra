@@ -87,3 +87,16 @@ test("loop steps get their own nodes and edges; approvals move in and out of pen
   const item = run.steps.s2!.items.find((i) => i.kind === "approval");
   assert.ok(item?.kind === "approval" && item.state === "approved");
 });
+
+test("project runs: run.started carries the project, project.applied records apply and undo", () => {
+  seq = 0;
+  const started = ev({ type: "run.started", data: { prompt: "p", source: "claudestra", authMode: "demo", budgetUsd: 1, agents: [], project: { id: "pr1", name: "Sayt" } } as EventData["data"] } as EventData);
+  let run = play([started, ev({ type: "run.completed", data: { answer: "ok", totalCostUsd: 0, durationMs: 1, numTurns: 1 } })]);
+  assert.deepEqual(run.project, { id: "pr1", name: "Sayt" });
+  assert.equal(run.applied, undefined);
+  run = reduceRun(run, ev({ type: "project.applied", data: { projectId: "pr1", applied: 3, skipped: 1, undone: false } }));
+  assert.deepEqual(run.applied, { applied: 3, skipped: 1, undone: false });
+  run = reduceRun(run, ev({ type: "project.applied", data: { projectId: "pr1", applied: 3, skipped: 0, undone: true } }));
+  assert.equal(run.applied?.undone, true);
+  assert.equal(run.status, "completed", "apply after completion keeps the status");
+});

@@ -8,6 +8,9 @@ import type { WorkflowStore } from "./workflows.ts";
 import type { StartOptions } from "./orchestrator.ts";
 import { resolveSdkAuth } from "./auth.ts";
 import { startOfDay, startOfMonth } from "./analytics.ts";
+import { mkdirSync, rmSync } from "node:fs";
+import path from "node:path";
+import { ProjectError, type Projects } from "./projects.ts";
 
 export class HttpError extends Error {
   constructor(public status: 400 | 403 | 404 | 409 | 429, message: string) {
@@ -22,6 +25,7 @@ export type RunRequest = {
   workflowId?: string;
   params?: Record<string, string>;
   language?: AnswerLanguage;
+  projectId?: string;
   createdBy?: string;
   // Who started it: "user", "trigger:<id>", "eval:<id>".
   origin?: string;
@@ -36,6 +40,7 @@ export class RunLauncher {
     private agents: AgentRegistry,
     private workflows: WorkflowStore,
     private runner: Starter,
+    private projects?: Projects,
   ) {}
 
   start(req: RunRequest): { runId: string } {
@@ -67,6 +72,21 @@ export class RunLauncher {
     if (!prompt) throw new HttpError(400, "prompt is required");
 
     const runId = randomUUID();
+    // Project runs start from a copy of the project's files (projects.ts).
+    let projectNote = "";
+    const project = req.projectId ? this.projects?.get(req.projectId) : undefined;
+    if (req.projectId && !project) throw new HttpError(404, "project not found");
+    if (project && this.projects) {
+      const workspace = path.join(this.config.workspacesDir, runId);
+      mkdirSync(workspace, { recursive: true });
+      try {
+        projectNote = this.projects.prepareRun(project.id, runId, workspace);
+      } catch (err) {
+        rmSync(workspace, { recursive: true, force: true });
+        if (err instanceof ProjectError) throw new HttpError(err.status, err.message);
+        throw err;
+      }
+    }
     this.store.create({ id: runId, prompt, source: "claudestra", createdBy: req.createdBy, origin: req.origin });
     this.store.append(runId, {
       type: "run.started",
@@ -83,9 +103,10 @@ export class RunLauncher {
         origin: req.origin ?? "user",
         createdBy: req.createdBy,
         language: req.language ?? "auto",
+        ...(project ? { project: { id: project.id, name: project.name } } : {}),
       },
     });
-    this.runner.start(runId, { prompt, profile, approvalMode, plan, language: req.language ?? "auto" }).catch((err: unknown) => {
+    this.runner.start(runId, { prompt, profile, approvalMode, plan, language: req.language ?? "auto", projectNote }).catch((err: unknown) => {
       if (this.store.status(runId) === "running") this.store.append(runId, { type: "run.failed", data: { error: err instanceof Error ? err.message : String(err) } });
     });
     return { runId };

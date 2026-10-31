@@ -110,6 +110,8 @@ export const EventData = z.discriminatedUnion("type", [
       origin: z.string().default("user"),
       createdBy: z.string().optional(),
       language: AnswerLanguage.default("auto"),
+      // Set when the run continues a project (upgrade A3).
+      project: z.object({ id: z.string(), name: z.string() }).optional(),
     }),
   }),
   z.object({ type: z.literal("run.paused"), data: z.object({ by: z.string() }) }),
@@ -142,6 +144,8 @@ export const EventData = z.discriminatedUnion("type", [
   z.object({ type: z.literal("step.rejected"), data: z.object({ approvalId: z.string(), by: z.string(), note: z.string().default("") }) }),
   z.object({ type: z.literal("skill.loaded"), data: z.object({ name: z.string() }) }),
   // Cross-run memory handed to the CEO / agents for this run (docs/04 "Context between runs").
+  // A project run's changes were applied to (or taken back from) the project folder; may follow run.completed.
+  z.object({ type: z.literal("project.applied"), data: z.object({ projectId: z.string(), applied: z.number(), skipped: z.number(), undone: z.boolean().default(false) }) }),
   z.object({ type: z.literal("memory.recalled"), data: z.object({ notes: z.number(), runs: z.array(z.object({ runId: z.string(), prompt: z.string() })) }) }),
 
   z.object({ type: z.literal("tool.called"), data: z.object({ callId: z.string(), tool: z.string(), input: z.unknown() }) }),
@@ -193,6 +197,7 @@ export const CreateRunRequest = z.object({
   workflowId: z.string().optional(),
   params: z.record(z.string(), z.string()).default({}),
   language: AnswerLanguage.optional(),
+  projectId: z.string().max(64).optional(),
 });
 export type CreateRunRequest = z.infer<typeof CreateRunRequest>;
 

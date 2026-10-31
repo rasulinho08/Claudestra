@@ -40,6 +40,12 @@
 
 Selecting an **edge** shows the handoff payload.
 
+## HQ (home page, upgrade V4)
+`#/hq` is the landing page (`GET /api/hq`, polled every 3 s): **Needs your OK** (pending tool approvals across all
+running runs with Approve/Reject in place; plan approvals link to the run), **Working now** (running tasks and the
+agents active in them), **Team** (every agent with busy/free), **Recent work**, **Projects**, **Coming up**
+(enabled schedules by next fire time) and **Costs** (today / this month against the caps). Phone width shows one column.
+
 ## Results (what a run produced)
 Every run writes into its own folder, `workspaces/<runId>/` (git-ignored); the Files tab lists it and `.md` files are
 shown formatted (toggle **Source**). The final answer and finished agent messages render as Markdown

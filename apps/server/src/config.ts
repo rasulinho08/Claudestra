@@ -68,6 +68,9 @@ export type Config = {
   webOrigins: string[];
   // Extra host names the browser may use for a server bound to this computer (DNS-rebinding guard).
   allowedHosts: string[];
+  // Projects (upgrade A3): Claudestra-managed project folders and the undo snapshots of applied changes.
+  projectsDir: string;
+  snapshotsDir: string;
 };
 
 const localEngine = (e: NodeJS.ProcessEnv) =>
@@ -140,5 +143,7 @@ export function loadConfig(): Config {
     githubApiUrl: process.env.GITHUB_API_URL || "https://api.github.com",
     webOrigins: list("WEB_ORIGINS", ["http://127.0.0.1:5173", "http://localhost:5173"]),
     allowedHosts: list("ALLOWED_HOSTS", []),
+    projectsDir: path.resolve(repoRoot, process.env.PROJECTS_DIR ?? "projects"),
+    snapshotsDir: path.resolve(repoRoot, process.env.SNAPSHOTS_DIR ?? "data/snapshots"),
   };
 }

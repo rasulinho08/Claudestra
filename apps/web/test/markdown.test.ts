@@ -88,3 +88,11 @@ test("markdown: review fixes (C# headings, bold italic, parentheses in URLs, tab
   parseInline(long);
   assert.ok(Date.now() - t0 < 1500, "linear-ish on long text");
 });
+
+test("changes: line diff keeps context and collapses the rest", async () => {
+  const { lineDiff } = await import("../src/ChangesPanel.tsx");
+  const before = ["a", "b", "c", "d", "e", "f", "g", "h"].join("\n");
+  const after = ["a", "b", "c", "d", "E", "f", "g", "h"].join("\n");
+  const d = lineDiff(before, after)!;
+  assert.deepEqual(d.map((l) => l.kind + l.text), [" …", " c", " d", "-e", "+E", " f", " g", " …"]);
+});

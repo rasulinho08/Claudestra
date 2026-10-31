@@ -9,6 +9,7 @@ import { Stage } from "./stage/Stage.tsx";
 import { seconds, tokens, usd } from "./format.ts";
 import { api, errorText } from "./api.ts";
 import { agentFor } from "./graph.ts";
+import { ChangesButton } from "./ChangesPanel.tsx";
 import { agentName, lang, t, type Key } from "./i18n.ts";
 
 const VIEW_KEY = "claudestra.view";
@@ -31,7 +32,7 @@ function save(key: string, value: unknown) {
   }
 }
 
-export function RunsPage({ health, initialRun }: { health: HealthResponse | null; initialRun: string | null }) {
+export function RunsPage({ health, initialRun, initialProject }: { health: HealthResponse | null; initialRun: string | null; initialProject?: string | null }) {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [runId, setRunId] = useState<string | null>(initialRun);
   const [selection, setSelection] = useState<Selection>(null);
@@ -44,6 +45,13 @@ export function RunsPage({ health, initialRun }: { health: HealthResponse | null
     load(OPTS_KEY, { profile: "", approvalMode: "", language: (lang() === "az" ? "az" : "auto") as AnswerLanguage }),
   );
   const [cursor, setCursor] = useState<number | null>(null);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [projectId, setProjectId] = useState<string>(initialProject ?? "");
+  useEffect(() => {
+    api<{ projects: { id: string; name: string }[] }>("/api/projects")
+      .then((r) => setProjects(r.projects))
+      .catch(() => {});
+  }, []);
   const live = useRunEvents(runId);
 
   const profile = opts.profile || health?.defaultProfile || "balanced";
@@ -100,7 +108,7 @@ export function RunsPage({ health, initialRun }: { health: HealthResponse | null
     setSending(true);
     setError(null);
     try {
-      const body = await api<{ runId: string }>("/api/runs", { body: { prompt, profile, approvalMode, language: opts.language } });
+      const body = await api<{ runId: string }>("/api/runs", { body: { prompt, profile, approvalMode, language: opts.language, projectId: projectId || undefined } });
       openRun(body.runId);
       setPrompt("");
       refreshRuns();
@@ -200,6 +208,16 @@ export function RunsPage({ health, initialRun }: { health: HealthResponse | null
               </button>
             ))}
           </div>
+          {projects.length > 0 && (
+            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} title={t("composer.project")} aria-label={t("composer.project")}>
+              <option value="">{t("composer.noProject")}</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  📁 {p.name}
+                </option>
+              ))}
+            </select>
+          )}
           <select value={opts.language} onChange={(e) => setOption({ language: e.target.value as AnswerLanguage })} title={t("composer.answerLang")} aria-label={t("composer.answerLang")}>
             {(["auto", "az", "en", "ru", "tr"] as const).map((l) => (
               <option key={l} value={l}>
@@ -248,6 +266,12 @@ function RunBar(p: {
       {run.approvalMode === "auto" && live && !p.replaying && <span className="chip chip-auto">{t("bar.autoApprove")}</span>}
       {run.profile && <span className="chip">{run.profile}</span>}
       {run.mode === "workflow" && <span className="chip">{t("bar.workflow")}</span>}
+      {run.project && (
+        <a className="chip" href={`#/projects?id=${run.project.id}`} title={t("nav.projects")}>
+          📁 {run.project.name}
+        </a>
+      )}
+      <ChangesButton run={run} runId={p.runId} />
       <span className="run-bar-prompt" title={run.prompt}>
         {run.prompt}
       </span>

@@ -62,6 +62,9 @@ export type RunView = {
   mode?: "dynamic" | "workflow";
   paused: boolean;
   pending: PendingApproval[];
+  // Project runs (upgrade A3): the project and the latest apply/undo of the run's changes.
+  project?: { id: string; name: string };
+  applied?: { applied: number; skipped: number; undone: boolean };
 };
 
 export const emptyRun = (): RunView => ({
@@ -119,6 +122,10 @@ export function reduceRun(state: RunView, event: ClaudestraEvent): RunView {
       next.profile = event.data.profile;
       next.approvalMode = event.data.approvalMode;
       next.mode = event.data.mode;
+      next.project = event.data.project;
+      break;
+    case "project.applied":
+      next.applied = { applied: event.data.applied, skipped: event.data.skipped, undone: event.data.undone };
       break;
     case "run.paused":
       next.paused = true;
