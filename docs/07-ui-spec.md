@@ -40,6 +40,31 @@
 
 Selecting an **edge** shows the handoff payload.
 
+## Results (what a run produced)
+Every run writes into its own folder, `workspaces/<runId>/` (git-ignored); the Files tab lists it and `.md` files are
+shown formatted (toggle **Source**). The final answer and finished agent messages render as Markdown
+(`apps/web/src/markdown.ts`: a small parser that builds React elements, never injects HTML; links only http(s)/mailto).
+
+The **Results bar** sits above the answer and the file list once the run has files:
+- **▶ Try it**: opens the run's `index.html` (or the shallowest HTML file) in a preview window. Pages are served
+  read-only by a second server on `PREVIEW_PORT` (default `PORT+1`, `0` = off; `PREVIEW_URL` when deployed behind a
+  proxy) at `/<runId>/<token>/…`, where the token comes from `GET /api/runs/:id/preview` (HMAC, new on every server
+  start). The app opens it under the other loopback name (127.0.0.1 ↔ localhost), so the page is a different site:
+  its own `localStorage` and cookies, no access to the API's cookies, no reads of the API, and its writes are refused
+  by the Origin check below. Files are resolved with `realpath`, so links/junctions cannot leave the workspace.
+- **📁 Open folder**: opens the folder in Explorer/Finder; only when the server and the browser are on the same computer.
+- **⬇ ZIP**: all files except `.claudestra/` notes (`GET /api/runs/:id/zip`, 100 MB cap).
+- **⬆ GitHub**: `POST /api/runs/:id/github {repo, private}` with `GITHUB_TOKEN` through the REST API (no git needed,
+  works with every engine). A missing repo is created (private by default); an existing one gets one commit that adds
+  or updates files, nothing is deleted. Pushes are remembered per run (`GET /api/runs/:id/exports`). Owner only.
+
+API writes from a browser must come from the app's own origin or `WEB_ORIGINS` (default the Vite dev server); other
+websites and the preview origin get 403. Requests without an `Origin` header (CLI, hooks) are unaffected. While the
+server is bound to this computer, the `Host` header must be localhost/127.0.0.1/[::1] or in `ALLOWED_HOSTS` (blocks
+DNS rebinding). Run ids must be one safe path segment; hook `session_id`s are restricted to letters, digits, `-`, `_`.
+Agents never inherit server-only secrets (`GITHUB_TOKEN`, `AUTH_TOKEN`, `HOOKS_SECRET`…), and Claudestra's own Bash
+tool also drops model API keys (`apps/server/src/secret-env.ts`).
+
 ## Approval mode switch
 A segmented control next to the prompt box: **Manual · Smart · Auto**. Auto shows a persistent amber "Auto-approve ON" chip
 in the top bar, and a one-click switch back to Smart mid-run.

@@ -1,16 +1,16 @@
 // AUTH_MODE=gemini: runs an agent step on Google's Gemini API (generateContent + function calling) instead of the
 // Claude Agent SDK. Tools are Claudestra's own (local-tools.ts) and go through the same approval policy.
-// Skills and MCP apps are Claude Code features and are not available here.
+// Skills work through the Skill tool (local-tools.ts); MCP apps need Claude.
 import { randomUUID } from "node:crypto";
 import type { EventData } from "@claudestra/protocol";
 import type { SessionRunner } from "./session.ts";
 import { HANDOFF_RULE } from "./session.ts";
 import type { SessionOutcome } from "./sdk-mapper.ts";
 import { truncate } from "./sdk-mapper.ts";
-import { TOOL_DECLARATIONS, runLocalTool } from "./local-tools.ts";
+import { declarationsFor, runLocalTool, skillCatalog } from "./local-tools.ts";
+import { gateFor, maxWaitMs, retryDecision } from "./quota.ts";
 
 const API = process.env.GEMINI_API_BASE ?? "https://generativelanguage.googleapis.com/v1beta";
-const MAX_RETRIES = 3;
 
 type Part = { text?: string; thought?: boolean; thoughtSignature?: string; functionCall?: { id?: string; name: string; args?: Record<string, unknown> }; functionResponse?: unknown };
 type Content = { role: "user" | "model"; parts: Part[] };
@@ -21,16 +21,12 @@ type Response = { candidates?: { content?: Content; finishReason?: string }[]; u
 const PRICE_IN = Number(process.env.GEMINI_PRICE_INPUT_PER_M) || 0;
 const PRICE_OUT = Number(process.env.GEMINI_PRICE_OUTPUT_PER_M) || 0;
 
-const sleep = (ms: number, signal: AbortSignal) =>
-  new Promise<void>((resolve) => {
-    const t = setTimeout(resolve, ms);
-    signal.addEventListener("abort", () => (clearTimeout(t), resolve()), { once: true });
-  });
-
-function retryDelayMs(body: Response): number {
-  const info = (body.error?.details ?? []).find((d) => typeof d === "object" && d && "retryDelay" in d) as { retryDelay?: string } | undefined;
+// Gemini puts the wait in the error details (RetryInfo.retryDelay "37s"); per-day quotas name "PerDay" in QuotaFailure.
+export function geminiRetryInfo(body: Response): { retryAfterMs: number | null; daily: boolean } {
+  const details = body.error?.details ?? [];
+  const info = details.find((d) => typeof d === "object" && d && "retryDelay" in d) as { retryDelay?: string } | undefined;
   const s = Number.parseFloat(info?.retryDelay ?? "");
-  return Number.isFinite(s) ? Math.min(s * 1000 + 500, 60_000) : 15_000;
+  return { retryAfterMs: Number.isFinite(s) ? s * 1000 + 500 : null, daily: /PerDay/i.test(JSON.stringify(details)) };
 }
 
 export function explainGeminiError(status: number, message: string): string {
@@ -47,13 +43,17 @@ export const geminiSession: SessionRunner = async (req) => {
   const key = req.env.GEMINI_API_KEY ?? req.env.GOOGLE_API_KEY ?? "";
   const emit = (e: EventData) => !signal.aborted && req.emit(e);
   const isCeo = req.agent.info.id === "ceo";
-  const tools = isCeo ? [] : req.agent.tools.filter((t) => TOOL_DECLARATIONS[t]).map((t) => TOOL_DECLARATIONS[t]!);
-  let system = isCeo ? req.agent.systemPrompt : req.agent.systemPrompt + HANDOFF_RULE;
+  const skills = isCeo ? [] : (req.skills ?? []);
+  const tools = isCeo ? [] : declarationsFor(req.agent.tools, skills);
+  let system = isCeo ? req.agent.systemPrompt : req.agent.systemPrompt + HANDOFF_RULE + skillCatalog(req.workspace, skills);
   if (tools.length > 0) system += "\n\nWork only with relative paths inside the current workspace folder. Use the tools to do the work, then reply with your report.";
   let userText = req.prompt;
   if (req.outputSchema) userText += `\n\nReply with only a JSON object (no markdown) that matches this JSON schema:\n${JSON.stringify(req.outputSchema)}`;
 
   const contents: Content[] = [{ role: "user", parts: [{ text: userText }] }];
+  const gate = gateFor("gemini", req.env);
+  const waitLimit = maxWaitMs(req.env);
+  let waited = 0;
   const total = { in: 0, out: 0, cached: 0 };
   let turns = 0;
   let lastText = "";
@@ -80,7 +80,8 @@ export const geminiSession: SessionRunner = async (req) => {
       generationConfig: req.outputSchema ? { responseMimeType: "application/json" } : {},
     };
     let data: Response | null = null;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 0; ; attempt++) {
+      if (!(await gate.acquire(signal))) return { ok: false, text: "", costUsd: cost(), durationMs: Date.now() - started, numTurns: turns, error: "cancelled" };
       let res: globalThis.Response;
       try {
         res = await fetch(`${API}/models/${encodeURIComponent(req.model)}:generateContent`, {
@@ -99,13 +100,16 @@ export const geminiSession: SessionRunner = async (req) => {
         break;
       }
       const msg = json.error?.message ?? `HTTP ${res.status}`;
-      if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
-        const wait = res.status === 429 ? retryDelayMs(json) : 2000 * (attempt + 1);
-        emit({ type: "step.message", data: { messageId: randomUUID(), role: "system", partial: false, text: `Gemini is busy or rate-limited (${res.status}); retrying in ${Math.round(wait / 1000)} s…` } });
-        await sleep(wait, signal);
+      const info = geminiRetryInfo(json);
+      const next = retryDecision({ engine: "Gemini", status: res.status, attempt, waitedMs: waited, maxWaitMs: waitLimit, retryAfterMs: info.retryAfterMs, daily: info.daily });
+      if (next?.kind === "wait") {
+        // Shared cool-down: the other running steps wait too instead of hitting the limit again.
+        gate.cooldown(next.ms);
+        waited += next.ms;
+        emit({ type: "step.message", data: { messageId: randomUUID(), role: "system", partial: false, text: next.message } });
         continue;
       }
-      return fail(explainGeminiError(res.status, msg));
+      return fail(next ? `${next.message}\n\n${explainGeminiError(res.status, msg)}` : explainGeminiError(res.status, msg));
     }
     if (!data) return fail("No response from Gemini");
 
@@ -139,6 +143,7 @@ export const geminiSession: SessionRunner = async (req) => {
       const callId = call.id ?? `g-${randomUUID()}`;
       const input = call.args ?? {};
       emit({ type: "tool.called", data: { callId, tool: call.name, input } });
+      if (call.name === "Skill" && typeof input.skill === "string") emit({ type: "skill.loaded", data: { name: input.skill } });
       const decision = await req.authorize(call.name, input);
       let ok = false;
       let output = "";

@@ -208,6 +208,8 @@ export type HealthResponse = {
   defaultApprovalMode: ApprovalMode;
   agents: AgentInfo[];
   warning?: string;
+  // What the Results bar can offer (docs/07 "Results").
+  results?: { previewPort: number | null; previewUrl: string | null; openFolder: boolean; github: boolean };
 };
 
 export const ApprovalDecision = z.object({

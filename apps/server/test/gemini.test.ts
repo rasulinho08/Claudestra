@@ -56,7 +56,7 @@ test("gemini engine: plans, calls tools through the approval policy, writes file
     assert.equal(store.status("g"), "completed", JSON.stringify(events.filter((e) => e.type === "run.failed" || e.type === "step.failed")));
     assert.ok(existsSync(path.join(workspacesDir, "g", "hello.js")));
     assert.ok(existsSync(path.join(workspacesDir, "g", "README.md")));
-    assert.ok(events.some((e) => e.type === "step.message" && e.data.role === "system" && /retrying/.test(e.data.text)));
+    assert.ok(events.some((e) => e.type === "step.message" && e.data.role === "system" && /continuing automatically/.test(e.data.text)));
     // The model turn with its thoughtSignature is sent back unchanged, followed by the functionResponse.
     const followUp = calls.find((c) => c.body.contents.some((m) => m.parts.some((p) => p.functionResponse)))!;
     assert.equal(followUp.body.contents[1]!.parts[0]!.thoughtSignature, "sig");

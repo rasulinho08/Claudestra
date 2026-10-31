@@ -1,5 +1,6 @@
 import type { TimelineItem } from "./run-state.ts";
 import { t } from "./i18n.ts";
+import { Markdown } from "./Markdown.tsx";
 
 export type Decide = (approvalId: string, decision: "approve" | "approve_run" | "reject") => void;
 
@@ -17,6 +18,8 @@ export function Timeline({ items, onDecide }: { items: TimelineItem[]; onDecide?
 function Item({ item, onDecide }: { item: TimelineItem; onDecide?: Decide }) {
   switch (item.kind) {
     case "message":
+      // Finished assistant messages render as Markdown; streaming text stays plain until it is complete.
+      if (item.role === "assistant" && !item.streaming) return <Markdown className="msg msg-assistant" text={item.text} />;
       return <div className={`msg msg-${item.role} ${item.streaming ? "streaming" : ""}`}>{item.text}</div>;
     case "thinking":
       return (

@@ -65,7 +65,7 @@ test("meta engine: plans, calls tools, writes files, retries 429, sends Bearer k
   assert.ok(fake.calls.some((c) => c.body.response_format));
   const followUp = fake.calls.find((c) => c.body.messages.some((m) => m.role === "tool"))!;
   assert.equal(followUp.body.messages.find((m) => m.role === "tool")!.tool_call_id, "call_1");
-  assert.ok(events.some((e) => e.type === "step.message" && e.data.role === "system" && /retrying/.test(e.data.text)));
+  assert.ok(events.some((e) => e.type === "step.message" && e.data.role === "system" && /continuing automatically/.test(e.data.text)));
 });
 
 test("openai_compat: falls back when response_format is rejected; config errors are clear", async () => {
@@ -78,4 +78,19 @@ test("openai_compat: falls back when response_format is rejected; config errors 
   assert.ok("error" in compatEndpoint({ AUTH_MODE: "openai_compat", OPENAI_BASE_URL: "x" }));
   assert.equal(resolveSdkAuth("meta", { META_API_KEY: "k" }).ok, true);
   assert.equal(resolveSdkAuth("meta", {}).ok, false);
+});
+
+test("openai_compat presets: OpenRouter needs a key, Ollama and LM Studio are local and keyless", async () => {
+  const { compatEndpoint } = await import("../src/openai-compat.ts");
+  const ep = (env: Record<string, string>) => compatEndpoint({ AUTH_MODE: "openai_compat", ...env });
+  assert.match((ep({ OPENAI_PROVIDER: "openrouter", OPENAI_MODEL: "x" }) as { error: string }).error, /OPENAI_API_KEY.*openrouter\.ai\/keys/);
+  const or = ep({ OPENAI_PROVIDER: "openrouter", OPENAI_MODEL: "x", OPENAI_API_KEY: "k" });
+  assert.ok(!("error" in or) && or.baseUrl === "https://openrouter.ai/api/v1" && or.headers["x-title"] === "Claudestra" && !or.local);
+  const ol = ep({ OPENAI_PROVIDER: "Ollama", OPENAI_MODEL: "qwen3:8b" });
+  assert.ok(!("error" in ol) && ol.baseUrl === "http://127.0.0.1:11434/v1" && ol.local && ol.apiKey === "");
+  assert.ok(!("error" in ep({ OPENAI_PROVIDER: "lm-studio", OPENAI_MODEL: "m" })));
+  assert.match((ep({ OPENAI_PROVIDER: "ollama" }) as { error: string }).error, /OPENAI_MODEL=qwen3:8b/);
+  assert.match((ep({ OPENAI_PROVIDER: "nope", OPENAI_MODEL: "m" }) as { error: string }).error, /unknown/);
+  const custom = ep({ OPENAI_BASE_URL: "http://localhost:8080/v1/", OPENAI_MODEL: "m" });
+  assert.ok(!("error" in custom) && custom.local && custom.baseUrl === "http://localhost:8080/v1");
 });

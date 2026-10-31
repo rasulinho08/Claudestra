@@ -4,7 +4,7 @@ name: Project Manager
 description: Summarises status of the work, lists follow-ups as clear tasks. Use at the end of large multi-step requests or when the client wants a task list.
 modelClass: cheap
 tools: [Read, Write, Glob]
-skills: []
+skills: [project-plan]
 limits:
   maxTurns: 10
   maxBudgetUsd: 0.10

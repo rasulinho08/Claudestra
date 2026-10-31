@@ -19,6 +19,7 @@ import { Evals } from "./evals.ts";
 import { demoSession } from "./demo.ts";
 import { geminiSession } from "./gemini.ts";
 import { compatSession } from "./openai-compat.ts";
+import { PreviewTokens, startPreviewServer } from "./preview.ts";
 
 const step = (msg: string) => console.log(`[claudestra] ${msg}`);
 const config = loadConfig();
@@ -44,7 +45,21 @@ if (!loopback && !access.enabled) {
   process.exit(1);
 }
 
-const app = createApp({ config, store, agents, runner, skills, integrations, workflows, memory, access, triggers, evals, launcher, templatesDir: config.templatesDir, hooksSecret: config.hooksSecret });
+// "Try it" preview on its own port/origin (docs/07 "Results").
+let previewRunning = false;
+const previewTokens = new PreviewTokens();
+if (config.previewPort) {
+  const loopbackHost = ["127.0.0.1", "localhost", "::1"].includes(config.host);
+  const opts = { workspacesDir: config.workspacesDir, runExists: (id: string) => store.has(id), tokens: previewTokens, hosts: loopbackHost ? ["localhost", "127.0.0.1", "::1", ...config.allowedHosts] : [] };
+  // The browser opens previews as "localhost" when the app is on 127.0.0.1 (and the other way round); localhost may
+  // resolve to ::1 first, so listen on both loopback addresses.
+  for (const h of loopbackHost ? ["127.0.0.1", "::1"] : [config.host]) {
+    const quiet = h === "::1" ? () => {} : step;
+    startPreviewServer(h, config.previewPort, opts, quiet).on("listening", () => (previewRunning = true));
+  }
+}
+
+const app = createApp({ previewRunning: () => previewRunning, previewTokens, config, store, agents, runner, skills, integrations, workflows, memory, access, triggers, evals, launcher, templatesDir: config.templatesDir, hooksSecret: config.hooksSecret });
 const scheduler = new Scheduler(triggers, (t, params) =>
   launcher.start({ prompt: params.prompt ?? "", workflowId: t.workflowId, params, profile: t.profile, approvalMode: t.approvalMode, origin: `trigger:${t.id}`, createdBy: t.name || "schedule" }).runId,
 );
@@ -68,6 +83,7 @@ const server = serve({ fetch: app.fetch, hostname: config.host, port: config.por
   if (existsSync(webDist)) console.log(`  web app: http://${info.address}:${info.port}/`);
   const schedules = triggers.list().filter((t) => t.enabled);
   console.log(`  login: ${access.enabled ? `on (${access.users().length} user(s)${config.authToken ? " + AUTH_TOKEN" : ""})` : "off (local)"}; memory: ${memory.isEnabled ? "on" : "off"}; triggers: ${schedules.length} enabled`);
+  console.log(`  results: preview ${previewRunning ? `http://${config.host}:${config.previewPort}` : "off"}; GitHub export ${config.githubToken ? "on" : "off (set GITHUB_TOKEN)"}`);
   if (interrupted > 0) console.log(`  closed ${interrupted} run(s) interrupted by the last shutdown`);
   if (!auth.ok) console.warn(`  runs disabled: ${auth.reason}`);
   else if (auth.warning) console.warn(`  note: ${auth.warning}`);

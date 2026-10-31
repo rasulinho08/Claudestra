@@ -195,6 +195,13 @@ export class RunStore {
     };
   }
 
+  summary(runId: string): RunSummary | undefined {
+    const r = this.db.prepare("SELECT id, prompt, source, status, cost_usd, started_at, created_by, origin FROM runs WHERE id = ?").get(runId) as
+      | { id: string; prompt: string; source: RunSummary["source"]; status: RunStatus; cost_usd: number | null; started_at: string; created_by: string | null; origin: string | null }
+      | undefined;
+    return r && { id: r.id, prompt: r.prompt, source: r.source, status: r.status, costUsd: r.cost_usd, startedAt: r.started_at, createdBy: r.created_by, origin: r.origin };
+  }
+
   list(limit = 100): RunSummary[] {
     const rows = this.db
       .prepare("SELECT id, prompt, source, status, cost_usd, started_at, created_by, origin FROM runs ORDER BY started_at DESC LIMIT ?")

@@ -1,6 +1,6 @@
 # 3. Agents
 
-## Roster (v1: 10 agents + CEO)
+## Roster (13 agents + CEO)
 
 Full per-agent specs (prompt drafts, tools, limits, gates, failure modes) are in [agents/](agents/README.md).
 
@@ -17,6 +17,9 @@ Full per-agent specs (prompt drafts, tools, limits, gates, failure modes) are in
 | **Doc Writer** | README, API docs, changelog, user guides | read/write docs | cheap | late |
 | **Data Analyst** | Queries data, summarises numbers, builds charts | DB/Drive/Sheets MCP | mid | on demand |
 | **Project Manager** | Tracks tasks, writes status, files issues/tickets | GitHub issues, Notion | cheap | on demand / end |
+| **Designer** | Look and feel: layout, colours, CSS, SVG, accessibility; never changes behaviour | read/write/edit files | mid | after coder (polish) |
+| **Translator** | Translations and localisation (az, en, ru, tr…) keeping code and placeholders | read/write/edit files | mid | late |
+| **Marketer** | Landing copy, product texts, social posts, simple go-to-market; cites research, invents nothing | files, web search/fetch | mid | on demand |
 
 "Model class" is mapped in config to concrete model IDs, so upgrades are one-line changes.
 

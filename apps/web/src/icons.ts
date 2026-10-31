@@ -11,6 +11,9 @@ const ICONS: Record<string, string> = {
   "file-text": "¶",
   "bar-chart-3": "▮",
   kanban: "☰",
+  palette: "✎",
+  languages: "文",
+  megaphone: "📣",
   bot: "◆",
 };
 

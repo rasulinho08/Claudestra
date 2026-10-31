@@ -4,7 +4,7 @@ name: Security Checker
 description: Looks for exploitable vulnerabilities, leaked secrets, unsafe patterns and risky dependencies in produced code. Use for code handling input, auth, files, network or databases.
 modelClass: mid
 tools: [Read, Glob, Grep, Bash]
-skills: []
+skills: [security-web-owasp, secrets-hygiene, dependency-audit]
 limits:
   maxTurns: 15
   maxBudgetUsd: 0.30

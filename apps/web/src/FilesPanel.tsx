@@ -1,15 +1,21 @@
 import { useEffect, useState } from "react";
 import { api, errorText } from "./api.ts";
+import type { HealthResponse } from "@claudestra/protocol";
 import { t } from "./i18n.ts";
+import { Markdown } from "./Markdown.tsx";
+import { PreviewModal, htmlPages, previewBase } from "./ResultsBar.tsx";
 
 type Entry = { path: string; bytes: number; modified: string };
 
 // Workspace browser for a run (docs/07 "Files"): list on top, content below.
-export function FilesPanel({ runId, refreshKey }: { runId: string; refreshKey: number }) {
+export function FilesPanel({ runId, health, refreshKey }: { runId: string; health: HealthResponse | null; refreshKey: number }) {
   const [files, setFiles] = useState<Entry[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [content, setContent] = useState<{ content: string; truncated: boolean; binary: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [raw, setRaw] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const base = previewBase(health);
 
   useEffect(() => {
     api<Entry[]>(`/api/runs/${runId}/files`).then(setFiles).catch((e) => setError(errorText(e)));
@@ -37,10 +43,31 @@ export function FilesPanel({ runId, refreshKey }: { runId: string; refreshKey: n
       </div>
       {open && (
         <div className="file-view">
-          <div className="small muted">{open}</div>
-          {!content ? <p className="muted small">{t("files.loading")}</p> : content.binary ? <p className="muted small">{t("files.binary")}</p> : <pre className="code">{content.content}{content.truncated && "\n… [truncated]"}</pre>}
+          <div className="file-head small muted">
+            <span>{open}</span>
+            {/\.html?$/i.test(open) && base && (
+              <button className="ghost small" onClick={() => setPreview(open)}>
+                ▶ {t("results.try")}
+              </button>
+            )}
+            {/\.md$/i.test(open) && (
+              <button className="ghost small" onClick={() => setRaw(!raw)}>
+                {raw ? t("files.rendered") : t("files.raw")}
+              </button>
+            )}
+          </div>
+          {!content ? (
+            <p className="muted small">{t("files.loading")}</p>
+          ) : content.binary ? (
+            <p className="muted small">{t("files.binary")}</p>
+          ) : /\.md$/i.test(open) && !raw ? (
+            <Markdown className="file-md" text={content.content} />
+          ) : (
+            <pre className="code">{content.content}{content.truncated && "\n… [truncated]"}</pre>
+          )}
         </div>
       )}
+      {preview && base && <PreviewModal base={base} runId={runId} page={preview} pages={htmlPages(files.map((f) => f.path))} onPage={setPreview} onClose={() => setPreview(null)} />}
     </div>
   );
 }

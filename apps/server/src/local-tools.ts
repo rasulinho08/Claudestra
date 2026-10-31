@@ -2,9 +2,11 @@
 // Same names and inputs as Claude Code's tools so the approval policy (approvals.ts) applies unchanged.
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isInside } from "./sandbox.ts";
+import { shellEnv } from "./secret-env.ts";
 
 export type ToolDeclaration = { name: string; description: string; parameters: Record<string, unknown> };
 
@@ -57,6 +59,54 @@ export const TOOL_DECLARATIONS: Record<string, ToolDeclaration> = {
     parameters: { type: "object", properties: { query: str("Search query") }, required: ["query"] },
   },
 };
+
+// Skills 2.0 (upgrade A2): the same skills/<name>/SKILL.md folders Claude Code uses, for the other engines.
+// The orchestrator copies an agent's skills into <workspace>/.claude/skills/; the agent sees a short catalogue in its
+// system prompt and loads a skill's full instructions with the Skill tool when the task matches.
+export const SKILL_DECLARATION: ToolDeclaration = {
+  name: "Skill",
+  description: "Load the full instructions of one of your skills (listed in the system prompt) before doing work it covers.",
+  parameters: { type: "object", properties: { skill: str("Skill name, e.g. clean-code") }, required: ["skill"] },
+};
+
+const frontmatter = (source: string) => /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(source);
+
+export function skillCatalog(workspace: string, names: string[]): string {
+  const lines: string[] = [];
+  for (const name of names) {
+    try {
+      const fm = frontmatter(readFileSync(path.join(workspace, ".claude", "skills", name, "SKILL.md"), "utf8"));
+      const desc = /^description:\s*(.+)$/m.exec(fm?.[1] ?? "")?.[1]?.replace(/^["']|["']$/g, "") ?? "";
+      lines.push(`- ${name}: ${desc}`);
+    } catch {
+      // skill folder missing: not offered
+    }
+  }
+  return lines.length ? `\n\nSkills (call the Skill tool with the name to read one before work it covers):\n${lines.join("\n")}` : "";
+}
+
+// Tool declarations for an agent on a non-Claude engine: its own tools plus Skill when it has skills.
+export function declarationsFor(tools: string[], skills: string[] = []): ToolDeclaration[] {
+  const decls = tools.filter((t) => TOOL_DECLARATIONS[t]).map((t) => TOOL_DECLARATIONS[t]!);
+  return skills.length > 0 ? [...decls, SKILL_DECLARATION] : decls;
+}
+
+async function loadSkill(workspace: string, input: Record<string, unknown>): Promise<{ ok: boolean; output: string }> {
+  const name = String(input.skill ?? input.name ?? "");
+  if (!/^[a-z0-9-]{1,64}$/.test(name)) return { ok: false, output: "skill names are lowercase letters, digits and dashes" };
+  const dir = path.join(workspace, ".claude", "skills", name);
+  let source: string;
+  try {
+    source = await readFile(path.join(dir, "SKILL.md"), "utf8");
+  } catch {
+    return { ok: false, output: `You have no skill named ${name}.` };
+  }
+  const files: string[] = [];
+  await walk(dir, dir, files, 50);
+  const extra = files.filter((f) => f !== "SKILL.md").map((f) => `.claude/skills/${name}/${f}`);
+  const body = frontmatter(source)?.[2] ?? source;
+  return { ok: true, output: cap(`${body.trim()}${extra.length ? `\n\nFiles in this skill (read them with Read when the instructions refer to them):\n${extra.join("\n")}` : ""}`) };
+}
 
 const MAX_OUTPUT = 20_000;
 const SKIP_DIRS = new Set([".git", "node_modules", ".claude", "__pycache__", ".venv"]);
@@ -111,7 +161,7 @@ function shellFor(): { file: string; args: (cmd: string) => string[] } {
 function runCommand(command: string, cwd: string, signal: AbortSignal, timeoutMs = 120_000): Promise<{ ok: boolean; output: string }> {
   return new Promise((resolve) => {
     const shell = shellFor();
-    const child = spawn(shell.file, shell.args(command), { cwd, env: process.env, windowsHide: true });
+    const child = spawn(shell.file, shell.args(command), { cwd, env: shellEnv(), windowsHide: true });
     let out = "";
     const add = (d: Buffer) => {
       if (out.length < MAX_OUTPUT * 2) out += d.toString("utf8");
@@ -227,6 +277,8 @@ export async function runLocalTool(tool: string, input: Record<string, unknown>,
     }
     case "WebSearch":
       return { ok: true, output: await webSearch(String(input.query ?? ""), signal) };
+    case "Skill":
+      return loadSkill(workspace, input);
     default:
       return { ok: false, output: `Unknown tool ${tool}` };
   }

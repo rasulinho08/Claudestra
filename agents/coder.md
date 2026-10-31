@@ -5,7 +5,7 @@ description: Implements code and files in the run workspace (create, edit). Use 
 modelClass: strong
 tools: [Read, Write, Edit, Glob, Grep, Bash]
 requiresApproval: ["Bash:*rm *", "Bash:*git push*", "Bash:*npm install*", "Bash:*pip install*", "Bash:*curl *", "Bash:*wget *", "mcp__*"]
-skills: [clean-code]
+skills: [clean-code, web-app-basics, debugging-method, refactoring-safely, git-hygiene, secrets-hygiene]
 limits:
   maxTurns: 30
   maxBudgetUsd: 1.00

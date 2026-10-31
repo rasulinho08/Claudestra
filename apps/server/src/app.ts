@@ -14,7 +14,13 @@ import type { SkillLibrary } from "./skills.ts";
 import type { IntegrationRegistry } from "./integrations.ts";
 import { WorkflowInput, WorkflowStore } from "./workflows.ts";
 import { analytics } from "./analytics.ts";
-import { listFiles, readWorkspaceFile } from "./files.ts";
+import { spawn } from "node:child_process";
+import { existsSync, statSync } from "node:fs";
+import { exportFiles, listFiles, readWorkspaceFile } from "./files.ts";
+import { createZip } from "./zip.ts";
+import { GitHubError, exportToGitHub, repoSlug } from "./github-export.ts";
+import { SkillImportError, importSkill } from "./skill-import.ts";
+import type { PreviewTokens } from "./preview.ts";
 import { HttpError, RunLauncher } from "./runs.ts";
 import { Memory } from "./memory.ts";
 import { Access, allows, requiredRole, safeEqual, tokenFrom } from "./access.ts";
@@ -44,7 +50,46 @@ export type Services = {
   launcher?: RunLauncher;
   templatesDir?: string;
   hooksSecret?: string | null;
+  // Whether the "Try it" preview server is listening (index.ts); tests leave it off.
+  previewRunning?: () => boolean;
+  previewTokens?: PreviewTokens;
+  // Opens a folder in the OS file manager; replaceable in tests.
+  openFolder?: (dir: string) => void;
 };
+
+// Explorer / Finder / the desktop's file manager. Fire and forget: explorer.exe exits with 1 even on success.
+export function openInFileManager(dir: string) {
+  const [cmd, args] = process.platform === "win32" ? ["explorer.exe", [dir]] : process.platform === "darwin" ? ["open", [dir]] : ["xdg-open", [dir]];
+  const child = spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: false });
+  child.on("error", () => {});
+  child.unref();
+}
+
+// A run id names a folder under workspaces/: one safe path segment, never "..", slashes or a drive letter.
+export const safeRunId = (id: string) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(id) && !id.includes("..");
+
+// DNS-rebinding guard for a server bound to this computer: the browser must address it as localhost/127.0.0.1/[::1]
+// (or a name in ALLOWED_HOSTS), so a hostile site that re-points its domain to 127.0.0.1 cannot use the API.
+export function hostAllowed(host: string | undefined, bindHost: string, extra: string[] = []): boolean {
+  if (!["127.0.0.1", "localhost", "::1"].includes(bindHost)) return true;
+  if (!host) return true;
+  const name = host.replace(/:\d+$/, "").replace(/^\[|\]$/g, "").toLowerCase();
+  return ["localhost", "127.0.0.1", "::1"].includes(name) || extra.map((h) => h.toLowerCase()).includes(name);
+}
+
+// CSRF guard: a write from a browser must come from the app itself (same host) or a configured dev origin.
+// Blocks other websites and the "Try it" preview origin from driving the API. Requests without Origin (curl, CLI) pass.
+export function originAllowed(origin: string | undefined, host: string | undefined, allowed: string[]): boolean {
+  if (!origin) return true;
+  if (origin === "null") return false;
+  try {
+    const u = new URL(origin);
+    if (host && u.host === host) return true;
+    return allowed.some((a) => a.replace(/\/+$/, "") === u.origin);
+  } catch {
+    return false;
+  }
+}
 
 type Env = { Variables: { user: SessionInfo["user"] } };
 
@@ -88,7 +133,27 @@ export function createApp(s: Services) {
   // Public: health, session, login/logout, webhook triggers (own secret). Observer hooks: loopback or HOOKS_SECRET.
   const PUBLIC = [/^\/api\/health$/, /^\/api\/session$/, /^\/api\/login$/, /^\/api\/logout$/, /^\/api\/triggers\/[^/]+\/fire$/];
 
+  app.use("*", async (c, next) => {
+    if (!hostAllowed(c.req.header("host"), config.host, config.allowedHosts)) return c.json({ error: "unexpected Host header (add it to ALLOWED_HOSTS if you use a custom name)" }, 403);
+    return next();
+  });
+
+  // Hooks come from the Claude Code CLI (no Origin); a browser posting here must be the app itself.
+  app.use("/hooks/*", async (c, next) => {
+    if (!originAllowed(c.req.header("origin"), c.req.header("x-forwarded-host") ?? c.req.header("host"), config.webOrigins)) return c.json({ error: "cross-origin request refused" }, 403);
+    return next();
+  });
+
+  app.use("/api/runs/:id/*", async (c, next) => {
+    if (!safeRunId(c.req.param("id"))) return c.json({ error: "run not found" }, 404);
+    return next();
+  });
+
   app.use("/api/*", async (c, next) => {
+    if (c.req.method !== "GET" && c.req.method !== "HEAD" && !/^\/api\/triggers\/[^/]+\/fire$/.test(c.req.path)) {
+      if (!originAllowed(c.req.header("origin"), c.req.header("x-forwarded-host") ?? c.req.header("host"), config.webOrigins))
+        return c.json({ error: "cross-origin request refused (add the page's origin to WEB_ORIGINS if this is your own UI)" }, 403);
+    }
     const user = access.enabled ? access.identify(tokenFrom(c.req.header("authorization"), c.req.header("cookie"), c.req.query("token"))) : { name: "local", role: "owner" as const };
     c.set("user", user);
     if (!access.enabled || PUBLIC.some((re) => re.test(c.req.path))) return next();
@@ -138,6 +203,12 @@ export function createApp(s: Services) {
       defaultApprovalMode: config.defaultApprovalMode,
       agents: agents.infos(),
       warning: auth.ok ? auth.warning : auth.reason,
+      results: {
+        previewPort: config.previewPort && (s.previewRunning?.() ?? false) ? config.previewPort : null,
+        previewUrl: config.previewUrl,
+        openFolder: isLoopback(remoteAddress(c)) && ["127.0.0.1", "localhost", "::1"].includes(config.host),
+        github: Boolean(config.githubToken),
+      },
     };
     return c.json(res);
   });
@@ -220,14 +291,96 @@ export function createApp(s: Services) {
   app.get("/api/runs/:id/files", (c) => {
     const id = c.req.param("id");
     if (!store.has(id)) return c.json({ error: "run not found" }, 404);
-    return c.json(listFiles(path.join(config.workspacesDir, id)));
+    return c.json(listFiles(runDir(id)));
+  });
+
+  // ---- results: ZIP, open folder, GitHub (docs/07 "Results") ---------------------------------
+
+  store.database.exec("CREATE TABLE IF NOT EXISTS run_exports (run_id TEXT NOT NULL, repo TEXT NOT NULL, url TEXT NOT NULL, commit_sha TEXT NOT NULL, at TEXT NOT NULL)");
+  function runDir(id: string): string {
+    const dir = path.resolve(config.workspacesDir, id);
+    if (!safeRunId(id) || path.dirname(dir) !== path.resolve(config.workspacesDir)) throw new HttpError(404, "run not found");
+    return dir;
+  }
+
+  app.get("/api/runs/:id/zip", (c) => {
+    const id = c.req.param("id");
+    if (!store.has(id)) return c.json({ error: "run not found" }, 404);
+    try {
+      const files = exportFiles(runDir(id), c.req.query("internal") === "1");
+      if (files.length === 0) return c.json({ error: "the run's workspace has no files" }, 404);
+      const zip = createZip(files);
+      const name = `${repoSlug(store.summary(id)?.prompt ?? "")}-${id.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 8)}.zip`;
+      return c.body(new Uint8Array(zip), 200, { "content-type": "application/zip", "content-disposition": `attachment; filename="${name}"`, "cache-control": "no-store" });
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  app.post("/api/runs/:id/open-folder", (c) => {
+    const id = c.req.param("id");
+    if (!store.has(id)) return c.json({ error: "run not found" }, 404);
+    let dir: string;
+    try {
+      dir = runDir(id);
+    } catch (err) {
+      return fail(c, err);
+    }
+    if (!existsSync(dir) || !statSync(dir).isDirectory()) return c.json({ error: "this run has no workspace folder yet", path: dir }, 404);
+    if (!isLoopback(remoteAddress(c)) || !["127.0.0.1", "localhost", "::1"].includes(config.host)) return c.json({ error: "only available when Claudestra runs on this computer", path: dir }, 403);
+    try {
+      (s.openFolder ?? openInFileManager)(dir);
+      return c.json({ ok: true, path: dir });
+    } catch (err) {
+      return c.json({ error: message(err), path: dir }, 500);
+    }
+  });
+
+  // Link for the "Try it" preview server (preview.ts); the token is per run and per server start.
+  app.get("/api/runs/:id/preview", (c) => {
+    const id = c.req.param("id");
+    if (!store.has(id)) return c.json({ error: "run not found" }, 404);
+    if (!s.previewTokens || !config.previewPort) return c.json({ error: "the preview server is off" }, 404);
+    return c.json({ path: `/${id}/${s.previewTokens.tokenFor(id)}/` });
+  });
+
+  app.get("/api/runs/:id/exports", (c) => {
+    const id = c.req.param("id");
+    if (!store.has(id)) return c.json({ error: "run not found" }, 404);
+    const rows = store.database.prepare("SELECT repo, url, commit_sha AS \"commit\", at FROM run_exports WHERE run_id = ? ORDER BY at DESC").all(id);
+    return c.json(rows);
+  });
+
+  app.post("/api/runs/:id/github", async (c) => {
+    const id = c.req.param("id");
+    if (!store.has(id)) return c.json({ error: "run not found" }, 404);
+    if (!config.githubToken) return c.json({ error: "Set GITHUB_TOKEN in .env (a GitHub token with repo access) and restart." }, 400);
+    const parsed = z.object({ repo: z.string().min(1).max(140), private: z.boolean().default(true), includeInternal: z.boolean().default(false) }).safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    const summary = store.summary(id);
+    try {
+      const result = await exportToGitHub({
+        token: config.githubToken,
+        apiUrl: config.githubApiUrl,
+        repo: parsed.data.repo,
+        private: parsed.data.private,
+        files: exportFiles(runDir(id), parsed.data.includeInternal),
+        message: `Claudestra run ${id.slice(0, 8)}: ${(summary?.prompt ?? "").replace(/\s+/g, " ").slice(0, 60)}`,
+        description: `Made with Claudestra: ${(summary?.prompt ?? "").replace(/\s+/g, " ").slice(0, 200)}`,
+      });
+      store.database.prepare("INSERT INTO run_exports (run_id, repo, url, commit_sha, at) VALUES (?, ?, ?, ?, ?)").run(id, result.repo, result.url, result.commit, new Date().toISOString());
+      return c.json(result);
+    } catch (err) {
+      if (err instanceof GitHubError) return c.json({ error: err.message }, err.status >= 500 ? 502 : err.status === 401 || err.status === 403 ? 400 : (err.status as 400));
+      return fail(c, err);
+    }
   });
 
   app.get("/api/runs/:id/file", (c) => {
     const id = c.req.param("id");
     if (!store.has(id)) return c.json({ error: "run not found" }, 404);
     try {
-      return c.json(readWorkspaceFile(path.join(config.workspacesDir, id), c.req.query("path") ?? ""));
+      return c.json(readWorkspaceFile(runDir(id), c.req.query("path") ?? ""));
     } catch (err) {
       return fail(c, err);
     }
@@ -251,6 +404,48 @@ export function createApp(s: Services) {
   });
 
   app.get("/api/skills", (c) => c.json(skills.list(agents.all().map((a) => ({ id: a.info.id, skills: a.skills })))));
+
+  // Skills 2.0 (upgrade A2): attach to agents in one click, import from GitHub, delete.
+  app.put("/api/skills/:name/agents", async (c) => {
+    const name = c.req.param("name");
+    const parsed = z.object({ agents: z.array(z.string()).max(100) }).safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    if (!skills.list().some((s) => s.name === name)) return c.json({ error: `no skill named ${name}` }, 404);
+    const want = new Set(parsed.data.agents);
+    try {
+      for (const a of agents.all()) {
+        if (a.info.id === "ceo") continue;
+        const has = a.skills.includes(name);
+        if (has !== want.has(a.info.id)) agents.setSkills(a.info.id, has ? a.skills.filter((s) => s !== name) : [...a.skills, name]);
+      }
+      return c.json(skills.list(agents.all().map((a) => ({ id: a.info.id, skills: a.skills }))).find((s) => s.name === name));
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  app.post("/api/skills/import", async (c) => {
+    const parsed = z.object({ url: z.string().min(1).max(500), name: z.string().max(64).optional(), overwrite: z.boolean().default(false) }).safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    try {
+      const result = await importSkill({ ...parsed.data, skillsDir: skills.directory, token: config.githubToken, apiUrl: config.githubApiUrl });
+      return c.json(result, 201);
+    } catch (err) {
+      if (err instanceof SkillImportError) return c.json({ error: err.message, choices: err.choices }, 400);
+      return fail(c, err);
+    }
+  });
+
+  app.delete("/api/skills/:name", (c) => {
+    const name = c.req.param("name");
+    try {
+      for (const a of agents.all()) if (a.skills.includes(name)) agents.setSkills(a.info.id, a.skills.filter((s) => s !== name));
+      skills.remove(name);
+      return c.json({ ok: true });
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
 
   app.get("/api/skills/:name", (c) => {
     try {
@@ -430,7 +625,10 @@ export function createApp(s: Services) {
     }
     const event = c.req.param("event");
     const payload = ((await body(c)) ?? {}) as HookPayload;
-    const sessionId = typeof payload.session_id === "string" ? payload.session_id : "unknown-session";
+    // The id becomes a run id and a folder name: only letters, digits, - and _.
+    const rawId = typeof payload.session_id === "string" ? payload.session_id : "unknown-session";
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(rawId)) return c.json({ error: "invalid session_id" }, 400);
+    const sessionId = rawId;
     const runId = `obs-${sessionId}`;
 
     // Observer runs are view-only: events keep being recorded even after SessionEnd or a server restart.

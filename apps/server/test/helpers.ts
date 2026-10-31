@@ -44,6 +44,12 @@ export function testConfig(over: Partial<Config> = {}): Config {
     authToken: null,
     hooksSecret: null,
     dbPath: ":memory:",
+    previewPort: 0,
+    previewUrl: null,
+    githubToken: null,
+    githubApiUrl: "https://api.github.invalid",
+    webOrigins: ["http://127.0.0.1:5173"],
+    allowedHosts: [],
     ...over,
   };
 }

@@ -4,7 +4,7 @@ name: Reviewer
 description: Reviews files the Coder produced for bugs, missing requirements and risks; returns a verdict with concrete findings. Use after a coder step.
 modelClass: strong
 tools: [Read, Glob, Grep, Bash]
-skills: [code-review-checklist]
+skills: [code-review-checklist, accessibility-check, refactoring-safely, fact-checking]
 limits:
   maxTurns: 15
   maxBudgetUsd: 0.40

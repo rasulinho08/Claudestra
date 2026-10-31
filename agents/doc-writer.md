@@ -4,7 +4,7 @@ name: Doc Writer
 description: Writes README, usage guides, API docs and changelog entries for finished work. Use when user- or developer-facing documentation is requested.
 modelClass: cheap
 tools: [Read, Write, Edit, Glob, Grep]
-skills: []
+skills: [readme-writing, api-docs, changelog, azerbaijani-writing]
 limits:
   maxTurns: 12
   maxBudgetUsd: 0.15

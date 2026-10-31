@@ -65,6 +65,8 @@ const OPERATOR_WRITES = [/^\/api\/runs(\/|$)/, /^\/api\/evals\/[^/]+\/run$/];
 // Minimum role for a request (GET is read access).
 export function requiredRole(method: string, path: string): Role {
   if (method === "GET" || method === "HEAD") return "viewer";
+  // Uses the owner's GitHub token or this computer's file manager.
+  if (/^\/api\/runs\/[^/]+\/(github|open-folder)$/.test(path)) return "owner";
   if (OPERATOR_WRITES.some((re) => re.test(path))) return "operator";
   return "owner";
 }

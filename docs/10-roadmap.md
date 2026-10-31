@@ -68,6 +68,12 @@ memory with embeddings, Slack/Telegram notifications for approvals.
 - Skills are copied into `<workspace>/.claude/skills/` per agent and enabled with the SDK `skills` option.
 - MCP: `integrations.json` + `${ENV}` secrets; per-agent `integrations: ["server:toolGlob"]`.
 - Workflows: SQLite `workflows` + `workflow_versions`; runs skip CEO planning.
+- Results (upgrade wave 1, W2): Markdown answers, "Try it" preview server (`preview.ts`), ZIP (`zip.ts`), open folder,
+  GitHub export (`github-export.ts`), Origin check against cross-site writes (`originAllowed` in `app.ts`). docs/07 "Results".
+- Wave 2: Skills 2.0 (`Skill` tool for non-Claude engines, attach/import UI, 34-skill pack; docs/05), new agents
+  Designer/Translator/Marketer (docs/03), quota-aware waiting (`quota.ts`: shared cool-down, `*_RPM` pacing,
+  `QUOTA_MAX_WAIT_SEC`), provider presets for `openai_compat` (`OPENAI_PROVIDER`: openrouter, groq, deepseek, ollama,
+  lmstudio; local models run one step at a time).
 
 ## Open questions
 1. **Primary use case** to optimise first: software building, research reports, or business analysis? (Default assumption: software building.)

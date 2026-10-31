@@ -15,5 +15,8 @@ One file per agent. These are the source for the `agents/*.md` definition files 
 | [Doc Writer](doc-writer.md) | Writes README, API docs, usage guides and changelog entries from the finished work. |
 | [Data Analyst](data-analyst.md) | Queries data, computes metrics, produces summaries and charts. |
 | [Project Manager](project-manager.md) | Tracks what was done, writes status updates, files issues/tickets for follow-ups. |
+| [Designer](designer.md) | Designs look and feel: layout, colours, typography, CSS, inline SVG, accessibility. Never changes behaviour. |
+| [Translator](translator.md) | Translates and localises texts, documents and app interfaces, keeping code, Markdown and placeholders intact. |
+| [Marketer](marketer.md) | Writes marketing and sales copy (landing pages, product texts, social posts, emails) and simple go-to-market plans. |
 
 Limits are starting values for the `balanced` profile; tune with real run data (doc 11).

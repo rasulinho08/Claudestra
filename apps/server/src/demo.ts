@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import type { EventData } from "@claudestra/protocol";
 import type { SessionRequest, SessionRunner } from "./session.ts";
 import type { SessionOutcome } from "./sdk-mapper.ts";
+import { runLocalTool } from "./local-tools.ts";
 
 const SPEED = Math.max(0.1, Number(process.env.DEMO_SPEED) || 1);
 const sleep = (ms: number, signal: AbortSignal) =>
@@ -50,6 +51,9 @@ export function demoPlan(request: string, cap: number) {
     last = [add("reviewer", "Review the implementation and request changes if needed.", last, code)];
     if (has(r, /(secur|safe|auth|təhlükəsiz)/u)) last = [add("security", "Check the code for security issues.", last, code)];
   }
+  if (wantsCode && has(r, words("design|style|css|beautiful|pretty|dizayn|gözəl|stil\\p{L}*"))) last = [add("designer", "Polish the look: layout, colours, accessibility.", last)];
+  if (has(r, words("market\\p{L}*|landing|slogan|posts?|reklam\\p{L}*|satış"))) last = [add("marketer", "Write the marketing copy.", last)];
+  if (has(r, words("translat\\p{L}*|tərcümə\\p{L}*|english|ingilis\\p{L}*|rus\\p{L}*"))) last = [add("translator", "Translate the texts.", last)];
   if (has(r, /(docs?|readme|document|sənəd)/u) || !wantsCode) add("doc-writer", wantsCode ? "Write a README for the result." : "Write report.md from the research.", last);
   return { route: steps.length === 1 ? "single_agent" : "team", summary: `Demo plan with ${steps.length} step(s) chosen from keywords in the request.`, directAnswer: "", steps: steps.slice(0, cap) };
 }
@@ -94,6 +98,12 @@ function toolsFor(req: SessionRequest, request: string): Tool[] {
       return [{ tool: "Read", input: { file_path: path.join(req.workspace, `${slug}.js`) }, output: "(demo) file contents" }];
     case "doc-writer":
       return [file("README.md", `# ${request.slice(0, 60)} (demo)\n\nHow to use the result.\n`)];
+    case "designer":
+      return [file("style.css", ":root { --accent: #f59e0b; --bg: #fff; }\n/* (demo) styles */\nbody { font-family: system-ui, sans-serif; }\n")];
+    case "translator":
+      return [file("README.en.md", `# (demo) English version\n\n${request.slice(0, 80)}\n`)];
+    case "marketer":
+      return [file("marketing/copy.md", `# (demo) Landing copy\n\n## Headline options\n1. …\n2. …\n3. …\n`)];
     case "data-analyst":
       return [{ tool: "Bash", input: { command: "python3 analyse.py" }, output: "(demo) rows: 120, mean: 42" }, file("analysis.md", "# Analysis (demo)\n")];
     default:
@@ -160,10 +170,17 @@ export const demoSession: SessionRunner = async (req): Promise<SessionOutcome> =
   // Specialists: think, use tools (through the real approval policy), report.
   await stream(`(demo) Starting: ${req.task.slice(0, 120)}`);
   usage(1);
-  for (const t of toolsFor(req, request)) {
+  // Skills 2.0: show the agent opening its first skill, with the real SKILL.md text.
+  const skillCalls: Tool[] = [];
+  if (req.skills?.length) {
+    const loaded = await runLocalTool("Skill", { skill: req.skills[0]! }, req.workspace, signal).catch(() => ({ ok: false, output: "" }));
+    if (loaded.ok) skillCalls.push({ tool: "Skill", input: { skill: req.skills[0]! }, output: loaded.output.slice(0, 600) });
+  }
+  for (const t of [...skillCalls, ...toolsFor(req, request)]) {
     if (signal.aborted) break;
     const callId = `demo-${randomUUID()}`;
     emit({ type: "tool.called", data: { callId, tool: t.tool, input: t.input } });
+    if (t.tool === "Skill") emit({ type: "skill.loaded", data: { name: String(t.input.skill) } });
     const decision = await req.authorize(t.tool, t.input);
     await sleep(1400, signal);
     if (!decision.allow) {

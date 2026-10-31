@@ -1,13 +1,15 @@
 // Builds the environment the Agent SDK runs with for each AUTH_MODE (docs/11 §1.1).
 import type { AuthMode } from "@claudestra/protocol";
 import { compatEndpoint } from "./openai-compat.ts";
+import { withoutSecrets } from "./secret-env.ts";
 
 export type SdkAuth =
   | { ok: true; env: Record<string, string | undefined>; warning?: string }
   | { ok: false; reason: string };
 
 export function resolveSdkAuth(mode: AuthMode, env: NodeJS.ProcessEnv): SdkAuth {
-  const base: Record<string, string | undefined> = { ...env };
+  // Server-only secrets (GITHUB_TOKEN, AUTH_TOKEN…) never reach agent sessions or their Bash commands.
+  const base: Record<string, string | undefined> = withoutSecrets({ ...env });
   switch (mode) {
     case "api_key":
       if (!env.ANTHROPIC_API_KEY) {
@@ -34,7 +36,7 @@ export function resolveSdkAuth(mode: AuthMode, env: NodeJS.ProcessEnv): SdkAuth 
       return {
         ok: true,
         env: base,
-        warning: "Using Google Gemini. Agents use Claudestra's own tools (files, Bash, web); skills and MCP apps are not available in this mode.",
+        warning: "Using Google Gemini. Agents use Claudestra's own tools (files, Bash, web) and skills; MCP apps need Claude.",
       };
     case "meta":
     case "openai_compat": {
@@ -43,7 +45,7 @@ export function resolveSdkAuth(mode: AuthMode, env: NodeJS.ProcessEnv): SdkAuth 
       return {
         ok: true,
         env: { ...base, AUTH_MODE: mode },
-        warning: `Using ${ep.name} (${ep.baseUrl}). Agents use Claudestra's own tools (files, Bash, web); skills and MCP apps are not available in this mode.`,
+        warning: `Using ${ep.name} (${ep.baseUrl}). Agents use Claudestra's own tools (files, Bash, web) and skills; MCP apps need Claude.`,
       };
     }
     case "demo":

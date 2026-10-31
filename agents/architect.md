@@ -4,7 +4,7 @@ name: Architect
 description: Designs structure, data model, interfaces and tech choices and records trade-offs. Use for new components or changes touching several files.
 modelClass: strong
 tools: [Read, Write, Glob, Grep]
-skills: []
+skills: [system-design-checklist, architecture-decision-records]
 limits:
   maxTurns: 15
   maxBudgetUsd: 0.50

@@ -59,7 +59,19 @@ export type Config = {
   authToken: string | null;
   hooksSecret: string | null;
   claudeCodePath?: string;
+  // Results (docs/07): "Try it" preview port (0 = off), its public URL when deployed, GitHub export token.
+  previewPort: number;
+  previewUrl: string | null;
+  githubToken: string | null;
+  githubApiUrl: string;
+  // Browser origins allowed to call the API besides the server's own (the Vite dev server).
+  webOrigins: string[];
+  // Extra host names the browser may use for a server bound to this computer (DNS-rebinding guard).
+  allowedHosts: string[];
 };
+
+const localEngine = (e: NodeJS.ProcessEnv) =>
+  ["ollama", "lmstudio", "lm-studio", "lm_studio"].includes((e.OPENAI_PROVIDER ?? "").toLowerCase()) || /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(e.OPENAI_BASE_URL ?? "");
 
 export const DEFAULT_NEVER_AUTO = ["Bash:*git push*", "Bash:*rm -rf*", "Bash:*sudo *", "mcp__*__create_*", "mcp__*__delete_*", "mcp__*__update_*", "mcp__*__push_*", "mcp__*__merge_*"];
 
@@ -104,7 +116,8 @@ export function loadConfig(): Config {
     defaultProfile: choice("DEFAULT_PROFILE", Profile, "balanced"),
     defaultApprovalMode: choice("DEFAULT_APPROVAL_MODE", ApprovalMode, "smart"),
     neverAuto: list("NEVER_AUTO", DEFAULT_NEVER_AUTO),
-    maxConcurrentSteps: num("MAX_CONCURRENT_STEPS", 3),
+    // A local model (Ollama / LM Studio) runs on this PC: one step at a time unless set explicitly (upgrade E3).
+    maxConcurrentSteps: num("MAX_CONCURRENT_STEPS", mode === "openai_compat" && localEngine(e) ? 1 : 3),
     maxLoopIterations: num("MAX_LOOP_ITERATIONS", 2),
     maxRetriesPerStep: num("MAX_RETRIES_PER_STEP", 1),
     dailyBudgetUsd: optionalNum("DAILY_BUDGET_USD"),
@@ -121,5 +134,11 @@ export function loadConfig(): Config {
     hooksSecret: process.env.HOOKS_SECRET || null,
     dbPath: process.env.DB_PATH === ":memory:" ? ":memory:" : path.resolve(repoRoot, process.env.DB_PATH ?? "data/claudestra.db"),
     claudeCodePath: process.env.CLAUDE_CODE_PATH || undefined,
+    previewPort: process.env.PREVIEW_PORT === "0" ? 0 : num("PREVIEW_PORT", num("PORT", 8787) + 1),
+    previewUrl: process.env.PREVIEW_URL?.replace(/\/+$/, "") || null,
+    githubToken: process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || null,
+    githubApiUrl: process.env.GITHUB_API_URL || "https://api.github.com",
+    webOrigins: list("WEB_ORIGINS", ["http://127.0.0.1:5173", "http://localhost:5173"]),
+    allowedHosts: list("ALLOWED_HOSTS", []),
   };
 }

@@ -26,8 +26,22 @@ How loading works:
    (`settingSources: ["project"]` + `Skill` tool allowed).
 3. The model sees skill names/descriptions and loads the full body on demand — so unused skills cost almost no tokens.
 
-UI: **Skills screen** lists skills, shows which agents use them, lets you import a folder, paste a `SKILL.md`,
-or attach/detach per agent.
+4. Other engines (Gemini, Meta, OpenAI-compatible, demo; upgrade A2 "Skills 2.0"): the agent's system prompt gets a
+   one-line catalogue (`name: description`) and a `Skill` tool (`apps/server/src/local-tools.ts`) that returns the
+   skill body plus the paths of its extra files, which the agent reads with `Read`. Same lazy loading, same cost profile.
+
+UI: **Skills screen** lists and filters skills, shows which agents use them, attaches/detaches a skill per agent with
+a checkbox (`PUT /api/skills/:name/agents`, rewrites only the `skills:` line of each agent file), imports a skill
+folder from a GitHub link (`POST /api/skills/import`; folder, `blob/.../SKILL.md`, repo root or raw file; ≤40 files,
+≤2 MB; a collection folder answers with the skill folders to pick from), and edits or deletes skills.
+
+**Skill pack.** `skills/` ships 34 skills with zero installs (standard library, plain HTML/CSS/JS only), pre-attached
+to the agents that need them: web-app-basics, responsive-css, svg-graphics, accessibility-check, seo-basics,
+landing-page-copy, social-media-posts, unit-testing-node, python-testing, test-plan, debugging-method,
+refactoring-safely, git-hygiene, security-web-owasp, secrets-hygiene, dependency-audit, data-cleaning-csv,
+charts-without-libraries, sql-basics, market-research, fact-checking, competitor-analysis, azerbaijani-writing,
+localization-i18n, readme-writing, api-docs, changelog, project-plan, architecture-decision-records,
+system-design-checklist, plus clean-code, code-review-checklist, source-citation, user-stories.
 
 ## Integrations (MCP)
 

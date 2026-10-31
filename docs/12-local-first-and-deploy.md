@@ -20,6 +20,7 @@ Required before exposing to a network:
 | Transport | HTTPS; SSE behind a proxy with buffering disabled |
 | Limits | Rate limiting, per-user budgets, concurrency caps |
 | Auto-approve | Off by default on deploy; requires explicit setting and `neverAuto` list |
+| Results | Expose `PREVIEW_PORT` (or put it behind its own host and set `PREVIEW_URL`); set `WEB_ORIGINS` if the UI is served from another origin; `GITHUB_TOKEN` is the owner's, so only owners may push |
 | Observability | Structured logs, error tracking, backup of `events` |
 
 Suggested targets: a single VM/container (Fly.io, Railway, VPS) for server + SQLite; static web on the same host or a CDN.

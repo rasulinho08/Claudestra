@@ -88,9 +88,26 @@ those to claim the credits or create a key.
    `META_PRICE_OUTPUT_PER_M` so the Costs page and budgets show real dollars.
 3. `Ctrl+C`, `npm run dev`. The badge shows `meta`; a step's Inspector shows `auth: meta`.
 
-Same engine, other providers: `AUTH_MODE=openai_compat` with `OPENAI_BASE_URL` + `OPENAI_MODEL` (+ `OPENAI_API_KEY`),
-for example OpenRouter (`https://openrouter.ai/api/v1`) or a free local model with Ollama (`http://localhost:11434/v1`,
-no key). Agents use Claudestra's own file/Bash/web tools; skills and MCP apps need Claude.
+## Other providers: OpenRouter, Groq, DeepSeek, or free offline models (Ollama / LM Studio)
+
+`AUTH_MODE=openai_compat` with a provider preset:
+
+| Provider | `.env` | Notes |
+|---|---|---|
+| OpenRouter | `OPENAI_PROVIDER=openrouter`, `OPENAI_API_KEY=...`, `OPENAI_MODEL=deepseek/deepseek-chat-v3.1:free` | one key, hundreds of models, some free (`:free`) |
+| Groq | `OPENAI_PROVIDER=groq`, `OPENAI_API_KEY=...`, `OPENAI_MODEL=llama-3.3-70b-versatile` | very fast |
+| DeepSeek | `OPENAI_PROVIDER=deepseek`, `OPENAI_API_KEY=...`, `OPENAI_MODEL=deepseek-chat` | cheap |
+| Ollama | `OPENAI_PROVIDER=ollama`, `OPENAI_MODEL=qwen3:8b` | free and offline: install from ollama.com, run `ollama pull qwen3:8b` |
+| LM Studio | `OPENAI_PROVIDER=lmstudio`, `OPENAI_MODEL=<id shown in LM Studio>` | free and offline: Developer tab → Start Server |
+
+Local models run one step at a time (they share your GPU/CPU; `MAX_CONCURRENT_STEPS` overrides). Pick a model that
+supports tool calling (Qwen 3, Llama 3.1+, Mistral); 7–8B models work for small tasks, bigger is better. Any other
+OpenAI-compatible server: leave `OPENAI_PROVIDER` empty and set `OPENAI_BASE_URL`. Agents use Claudestra's own
+file/Bash/web tools.
+
+**Rate limits:** when a provider says "busy" (429/503) every step waits and continues by itself (shown in the step as
+"waiting … until 21:42:10"), up to `QUOTA_MAX_WAIT_SEC` (10 minutes). On Gemini's free tier set `GEMINI_RPM=10` to
+avoid hitting the limit in the first place. A used-up daily quota stops the step with a clear message.
 
 ## Real AI for free: Google Gemini
 
@@ -103,9 +120,20 @@ no key). Agents use Claudestra's own file/Bash/web tools; skills and MCP apps ne
 3. `Ctrl+C`, then `npm run dev` (not `npm run demo`). The badge at the top shows `gemini`.
 
 Notes: the free tier allows only a few requests per minute, so prefer the **eco** profile and small tasks; when it is
-busy Claudestra waits and retries automatically. Agents use Claudestra's own file/Bash/web tools; skills and MCP apps
+busy Claudestra waits and retries automatically. Agents use Claudestra's own file/Bash/web tools and skills; MCP apps
 work only with Claude. If a model name stops working, set `GEMINI_MODEL_STRONG`, `GEMINI_MODEL_MID`, `GEMINI_MODEL_CHEAP`
 in `.env` to current ids from ai.google.dev/gemini-api/docs/models.
+
+## Where the results are
+
+Each task writes its files into `Claudestra\workspaces\<run id>\` (the id is in the address bar after `run=`).
+In the app, open the task and use the bar above **Answer** / **Files**:
+- **▶ Sına / Try it** runs the generated web page in a safe preview window (served on port 8788).
+- **📁 Qovluğu aç / Open folder** opens that folder in Explorer.
+- **⬇ ZIP** downloads everything.
+- **⬆ GitHub** pushes the files to a new or existing repository. One-time setup: on github.com go to Settings →
+  Developer settings → Personal access tokens, create a token (fine-grained: *Contents* and *Administration* read and
+  write for "All repositories"; or classic with the *repo* scope), then add `GITHUB_TOKEN=...` to `.env` and restart.
 
 ## Every day
 

@@ -4,7 +4,7 @@ name: Tester
 description: Writes and runs tests against the acceptance criteria and reports real results with reproduction steps. Use after a coder step when behaviour must be proven.
 modelClass: mid
 tools: [Read, Write, Edit, Glob, Grep, Bash]
-skills: []
+skills: [unit-testing-node, python-testing, test-plan, debugging-method]
 limits:
   maxTurns: 25
   maxBudgetUsd: 0.50

@@ -89,6 +89,21 @@ export class AgentRegistry {
     return def;
   }
 
+  // Rewrites only the `skills:` list in an agent's frontmatter (keeps comments and the rest of the file).
+  setSkills(id: string, skills: string[]): AgentDefinition {
+    const def = this.agents.get(id);
+    if (!def) throw new Error(`unknown agent ${id}`);
+    const match = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n?[\s\S]*)$/.exec(def.source);
+    if (!match) throw new Error(`${id}.md: missing YAML frontmatter`);
+    for (const s of skills) if (!/^[a-z0-9-]{1,64}$/.test(s)) throw new Error(`bad skill name ${s}`);
+    // Text edit, not a YAML round trip, so quoting, comments and line wrapping stay exactly as written.
+    const line = `skills: [${[...new Set(skills)].join(", ")}]`;
+    const fm = match[1]!;
+    const existing = /^skills:[^\n]*(?:\r?\n[ \t]+-[^\n]*)*/m;
+    const next = existing.test(fm) ? fm.replace(existing, line) : /^limits:/m.test(fm) ? fm.replace(/^limits:/m, `${line}\nlimits:`) : `${fm}\n${line}`;
+    return this.save(id, `---\n${next}\n---${match[2]}`);
+  }
+
   get(id: string): AgentDefinition | undefined {
     return this.agents.get(id);
   }

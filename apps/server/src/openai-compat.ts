@@ -1,15 +1,15 @@
 // AUTH_MODE=meta / openai_compat: runs an agent step on any OpenAI-compatible Chat Completions API (Meta Muse,
 // OpenRouter, DeepSeek, Groq, a local Ollama or LM Studio...). Tools are Claudestra's own (local-tools.ts) and go
-// through the same approval policy; skills and MCP apps are Claude Code features and are not available here.
+// through the same approval policy. Skills work through the Skill tool (local-tools.ts); MCP apps need Claude.
 import { randomUUID } from "node:crypto";
 import type { EventData } from "@claudestra/protocol";
 import type { SessionRunner } from "./session.ts";
 import { HANDOFF_RULE } from "./session.ts";
 import type { SessionOutcome } from "./sdk-mapper.ts";
 import { truncate } from "./sdk-mapper.ts";
-import { TOOL_DECLARATIONS, runLocalTool } from "./local-tools.ts";
+import { declarationsFor, runLocalTool, skillCatalog } from "./local-tools.ts";
+import { gateFor, maxWaitMs, retryAfterMs, retryDecision } from "./quota.ts";
 
-const MAX_RETRIES = 3;
 export const META_BASE_URL = "https://api.meta.ai/v1";
 
 type ToolCall = { id: string; type: "function"; function: { name: string; arguments: string } };
@@ -23,25 +23,38 @@ type Completion = {
   error?: { message?: string } | string;
 };
 
-export type CompatEndpoint = { name: string; baseUrl: string; apiKey: string; priceIn: number; priceOut: number };
+export type CompatEndpoint = { name: string; baseUrl: string; apiKey: string; priceIn: number; priceOut: number; local: boolean; headers: Record<string, string> };
+
+// OPENAI_PROVIDER presets (upgrade E5): base URL, whether a key is needed, and an example model for error messages.
+export const PROVIDERS: Record<string, { name: string; baseUrl: string; needsKey: boolean; local: boolean; example: string; keyHelp: string }> = {
+  openrouter: { name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", needsKey: true, local: false, example: "deepseek/deepseek-chat-v3.1:free", keyHelp: "openrouter.ai/keys" },
+  groq: { name: "Groq", baseUrl: "https://api.groq.com/openai/v1", needsKey: true, local: false, example: "llama-3.3-70b-versatile", keyHelp: "console.groq.com/keys" },
+  deepseek: { name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", needsKey: true, local: false, example: "deepseek-chat", keyHelp: "platform.deepseek.com/api_keys" },
+  ollama: { name: "Ollama", baseUrl: "http://127.0.0.1:11434/v1", needsKey: false, local: true, example: "qwen3:8b", keyHelp: "" },
+  lmstudio: { name: "LM Studio", baseUrl: "http://127.0.0.1:1234/v1", needsKey: false, local: true, example: "qwen/qwen3-8b", keyHelp: "" },
+};
+
+const isLocalUrl = (url: string) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:|\/|$)/i.test(url);
 
 // Which endpoint the current AUTH_MODE talks to. Meta has defaults; openai_compat needs OPENAI_BASE_URL.
 export function compatEndpoint(env: Record<string, string | undefined>): CompatEndpoint | { error: string } {
   if (env.AUTH_MODE === "meta") {
     const apiKey = env.META_API_KEY || env.MODEL_API_KEY || "";
     if (!apiKey) return { error: "AUTH_MODE=meta but META_API_KEY is not set in .env (create a key in Meta's developer console)" };
-    return { name: "Meta", baseUrl: (env.META_BASE_URL || META_BASE_URL).replace(/\/+$/, ""), apiKey, priceIn: Number(env.META_PRICE_INPUT_PER_M) || 0, priceOut: Number(env.META_PRICE_OUTPUT_PER_M) || 0 };
+    return { name: "Meta", baseUrl: (env.META_BASE_URL || META_BASE_URL).replace(/\/+$/, ""), apiKey, priceIn: Number(env.META_PRICE_INPUT_PER_M) || 0, priceOut: Number(env.META_PRICE_OUTPUT_PER_M) || 0, local: false, headers: {} };
   }
-  if (!env.OPENAI_BASE_URL) return { error: "AUTH_MODE=openai_compat but OPENAI_BASE_URL is not set in .env (e.g. https://openrouter.ai/api/v1 or http://localhost:11434/v1)" };
-  if (!env.OPENAI_MODEL && !env.OPENAI_MODEL_STRONG) return { error: "AUTH_MODE=openai_compat but OPENAI_MODEL is not set in .env" };
-  return { name: "OpenAI-compatible", baseUrl: env.OPENAI_BASE_URL.replace(/\/+$/, ""), apiKey: env.OPENAI_API_KEY || "", priceIn: Number(env.OPENAI_PRICE_INPUT_PER_M) || 0, priceOut: Number(env.OPENAI_PRICE_OUTPUT_PER_M) || 0 };
+  const providerId = (env.OPENAI_PROVIDER || "").toLowerCase().replace(/[\s_-]/g, "");
+  const preset = providerId ? PROVIDERS[providerId] : undefined;
+  if (providerId && !preset) return { error: `OPENAI_PROVIDER=${env.OPENAI_PROVIDER} is unknown; use one of ${Object.keys(PROVIDERS).join(", ")} or leave it empty and set OPENAI_BASE_URL` };
+  const baseUrl = (env.OPENAI_BASE_URL || preset?.baseUrl || "").replace(/\/+$/, "");
+  if (!baseUrl) return { error: "AUTH_MODE=openai_compat needs OPENAI_PROVIDER (openrouter, groq, deepseek, ollama, lmstudio) or OPENAI_BASE_URL in .env" };
+  const name = preset?.name ?? "OpenAI-compatible";
+  if (!env.OPENAI_MODEL && !env.OPENAI_MODEL_STRONG) return { error: `AUTH_MODE=openai_compat but OPENAI_MODEL is not set in .env${preset ? ` (for ${name}, e.g. OPENAI_MODEL=${preset.example})` : ""}` };
+  const apiKey = env.OPENAI_API_KEY || "";
+  if (preset?.needsKey && !apiKey && !env.OPENAI_BASE_URL) return { error: `${name} needs OPENAI_API_KEY in .env (create one at ${preset.keyHelp})` };
+  const headers: Record<string, string> = providerId === "openrouter" ? { "x-title": "Claudestra", "http-referer": "https://github.com/rasulinho08/claudestra" } : {};
+  return { name, baseUrl, apiKey, priceIn: Number(env.OPENAI_PRICE_INPUT_PER_M) || 0, priceOut: Number(env.OPENAI_PRICE_OUTPUT_PER_M) || 0, local: preset?.local ?? isLocalUrl(baseUrl), headers };
 }
-
-const sleep = (ms: number, signal: AbortSignal) =>
-  new Promise<void>((resolve) => {
-    const t = setTimeout(resolve, ms);
-    signal.addEventListener("abort", () => (clearTimeout(t), resolve()), { once: true });
-  });
 
 export function explainCompatError(name: string, status: number, message: string): string {
   if (status === 401 || status === 403) return `${message}\n\nFix: check the API key for ${name} in .env and restart.`;
@@ -65,9 +78,10 @@ export const compatSession: SessionRunner = async (req) => {
   }
 
   const isCeo = req.agent.info.id === "ceo";
-  const decls = isCeo ? [] : req.agent.tools.filter((t) => TOOL_DECLARATIONS[t]).map((t) => TOOL_DECLARATIONS[t]!);
+  const skills = isCeo ? [] : (req.skills ?? []);
+  const decls = isCeo ? [] : declarationsFor(req.agent.tools, skills);
   const tools = decls.map((d) => ({ type: "function" as const, function: { name: d.name, description: d.description, parameters: d.parameters } }));
-  let system = isCeo ? req.agent.systemPrompt : req.agent.systemPrompt + HANDOFF_RULE;
+  let system = isCeo ? req.agent.systemPrompt : req.agent.systemPrompt + HANDOFF_RULE + skillCatalog(req.workspace, skills);
   if (tools.length > 0) system += "\n\nWork only with relative paths inside the current workspace folder. Use the tools to do the work, then reply with your report.";
   let userText = req.prompt;
   if (req.outputSchema) userText += `\n\nReply with only a JSON object (no markdown) that matches this JSON schema:\n${JSON.stringify(req.outputSchema)}`;
@@ -77,6 +91,9 @@ export const compatSession: SessionRunner = async (req) => {
     { role: "user", content: userText },
   ];
   const total = { in: 0, out: 0, cached: 0 };
+  const gate = gateFor(req.env.AUTH_MODE === "meta" ? "meta" : "openai", req.env);
+  const waitLimit = maxWaitMs(req.env);
+  let waited = 0;
   const cost = () => Math.round(((total.in * endpoint.priceIn + total.out * endpoint.priceOut) / 1_000_000) * 1e6) / 1e6;
   const usage = (final: boolean) =>
     emit({ type: "usage.updated", data: { inputTokens: total.in, outputTokens: total.out, cacheReadTokens: total.cached, cacheCreationTokens: 0, costUsd: final ? cost() : null } });
@@ -96,7 +113,8 @@ export const compatSession: SessionRunner = async (req) => {
     turns++;
 
     let data: Completion | null = null;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 0; ; attempt++) {
+      if (!(await gate.acquire(signal))) return cancelled();
       const body: Record<string, unknown> = { model: req.model, messages };
       if (tools.length > 0) body.tools = tools;
       if (useJsonSchema && req.outputSchema) body.response_format = { type: "json_schema", json_schema: { name: "decision", schema: req.outputSchema } };
@@ -104,13 +122,14 @@ export const compatSession: SessionRunner = async (req) => {
       try {
         res = await fetch(`${endpoint.baseUrl}/chat/completions`, {
           method: "POST",
-          headers: { "content-type": "application/json", ...(endpoint.apiKey ? { authorization: `Bearer ${endpoint.apiKey}` } : {}) },
+          headers: { "content-type": "application/json", ...endpoint.headers, ...(endpoint.apiKey ? { authorization: `Bearer ${endpoint.apiKey}` } : {}) },
           body: JSON.stringify(body),
           signal,
         });
       } catch (err) {
         if (signal.aborted) return cancelled();
-        return fail(`Could not reach ${endpoint.name} at ${endpoint.baseUrl}: ${err instanceof Error ? err.message : String(err)}`);
+        const why = err instanceof Error ? err.message : String(err);
+        return fail(`Could not reach ${endpoint.name} at ${endpoint.baseUrl}: ${why}${endpoint.local ? `\n\nFix: start ${endpoint.name} first (Ollama: \`ollama serve\` and \`ollama pull <model>\`; LM Studio: Developer tab → Start Server).` : ""}`);
       }
       const json = (await res.json().catch(() => ({}))) as Completion;
       if (res.ok) {
@@ -123,14 +142,16 @@ export const compatSession: SessionRunner = async (req) => {
         attempt--;
         continue;
       }
-      if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
-        const retryAfter = Number(res.headers.get("retry-after"));
-        const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 60_000) : 2000 * 2 ** attempt;
-        emit({ type: "step.message", data: { messageId: randomUUID(), role: "system", partial: false, text: `${endpoint.name} is busy or rate-limited (${res.status}); retrying in ${Math.round(wait / 1000)} s…` } });
-        await sleep(wait, signal);
+      // "insufficient_quota" (no credit) and per-day limits will not clear by waiting.
+      const daily = /insufficient_quota|per.?day|daily/i.test(msg) || res.status === 402;
+      const next = retryDecision({ engine: endpoint.name, status: res.status, attempt, waitedMs: waited, maxWaitMs: waitLimit, retryAfterMs: retryAfterMs(res.headers.get("retry-after")), daily });
+      if (next?.kind === "wait") {
+        gate.cooldown(next.ms);
+        waited += next.ms;
+        emit({ type: "step.message", data: { messageId: randomUUID(), role: "system", partial: false, text: next.message } });
         continue;
       }
-      return fail(explainCompatError(endpoint.name, res.status, msg));
+      return fail(next ? `${next.message}\n\n${explainCompatError(endpoint.name, res.status, msg)}` : explainCompatError(endpoint.name, res.status, msg));
     }
     if (!data) return fail(`No response from ${endpoint.name}`);
 
@@ -166,6 +187,7 @@ export const compatSession: SessionRunner = async (req) => {
         output = "The tool arguments were not valid JSON; send them again as a JSON object.";
       }
       emit({ type: "tool.called", data: { callId, tool: call.function.name, input } });
+      if (call.function.name === "Skill" && typeof input.skill === "string") emit({ type: "skill.loaded", data: { name: input.skill } });
       if (!output) {
         const decision = await req.authorize(call.function.name, input);
         if (!decision.allow) output = decision.reason;

@@ -1,4 +1,7 @@
 import { useState } from "react";
+import type { HealthResponse } from "@claudestra/protocol";
+import { Markdown } from "./Markdown.tsx";
+import { ResultsBar } from "./ResultsBar.tsx";
 import type { RunView } from "./run-state.ts";
 import { agentFor } from "./graph.ts";
 import { iconFor } from "./icons.ts";
@@ -23,10 +26,11 @@ const AUTH_LABEL: Record<string, string> = {
 
 export type Selection = { kind: "step"; id: string } | { kind: "edge"; from: string; to: string } | { kind: "answer" } | { kind: "files" } | null;
 
-type Props = { run: RunView; runId: string; selection: Selection; onSelect: (s: Selection) => void; onDecide: Decide };
+type Props = { run: RunView; runId: string; health: HealthResponse | null; selection: Selection; onSelect: (s: Selection) => void; onDecide: Decide };
 
-export function Inspector({ run, runId, selection, onSelect, onDecide }: Props) {
+export function Inspector({ run, runId, health, selection, onSelect, onDecide }: Props) {
   const hasAnswer = run.status === "completed" || run.status === "failed";
+  const refreshKey = run.status === "running" ? Math.floor(run.lastSeq / 25) : run.lastSeq;
   const tab = selection?.kind === "answer" ? "answer" : selection?.kind === "files" ? "files" : "step";
   return (
     <div className="inspector">
@@ -42,7 +46,14 @@ export function Inspector({ run, runId, selection, onSelect, onDecide }: Props) 
         </button>
       </div>
       <div className="inspector-body">
-        {tab === "files" ? <FilesPanel runId={runId} refreshKey={run.status === "running" ? Math.floor(run.lastSeq / 25) : run.lastSeq} /> : body(run, runId, selection, onDecide)}
+        {tab === "files" ? (
+          <>
+            <ResultsBar runId={runId} prompt={run.prompt} health={health} refreshKey={refreshKey} />
+            <FilesPanel runId={runId} health={health} refreshKey={refreshKey} />
+          </>
+        ) : (
+          body(run, runId, health, selection, onDecide)
+        )}
       </div>
     </div>
   );
@@ -79,12 +90,13 @@ function SaveWorkflow({ runId }: { runId: string }) {
   );
 }
 
-function body(run: RunView, runId: string, selection: Selection, onDecide: Decide) {
+function body(run: RunView, runId: string, health: HealthResponse | null, selection: Selection, onDecide: Decide) {
   if (selection?.kind === "answer") {
     if (run.status === "failed") return <div className="error">{run.error}</div>;
     return (
       <>
-        <div className="answer">{run.answer}</div>
+        <ResultsBar runId={runId} prompt={run.prompt} health={health} refreshKey={run.lastSeq} />
+        <Markdown className="answer" text={run.answer ?? ""} />
         <div className="muted small answer-meta">
           {usd(run.costUsd)} · {run.durationMs !== undefined && seconds(run.durationMs)} · {t("insp.steps", { n: Object.keys(run.steps).length })}
           {run.plan && ` · ${t("insp.route", { route: run.plan.route })}`}

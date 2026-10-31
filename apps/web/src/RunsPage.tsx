@@ -179,7 +179,7 @@ export function RunsPage({ health, initialRun }: { health: HealthResponse | null
       </main>
 
       <section className="side-panel">
-        {runId ? <Inspector run={run} runId={runId} selection={selection} onSelect={select} onDecide={decide} /> : <Roster health={health} />}
+        {runId ? <Inspector run={run} runId={runId} health={health} selection={selection} onSelect={select} onDecide={decide} /> : <Roster health={health} />}
       </section>
 
       <form className="composer" onSubmit={send}>
