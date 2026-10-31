@@ -72,3 +72,26 @@ test("director joining a finished run starts at the finish without replaying his
   assert.equal(d.sync(run, () => "#fff"), FINISH);
   assert.equal(d.queue.length, 0);
 });
+
+test("desk workers: activity from tool and role, mood from status", async () => {
+  const { activityFor, moodFor } = await import("../src/stage/world.ts");
+  assert.equal(activityFor("researcher", undefined), "search");
+  assert.equal(activityFor("coder", undefined), "think");
+  assert.equal(activityFor("coder", "Write"), "type");
+  assert.equal(activityFor("coder", "WebSearch"), "search");
+  assert.equal(activityFor("designer", "Edit"), "paint");
+  assert.equal(activityFor("tester", "Bash"), "test");
+  assert.equal(activityFor("reviewer", "Read"), "review");
+  assert.equal(activityFor("doc-writer", "Read"), "read");
+  assert.equal(activityFor("translator", "Write"), "translate");
+  assert.equal(activityFor("marketer", "Write"), "shout");
+  assert.equal(activityFor("data-analyst", "Bash"), "chart");
+  assert.equal(activityFor("researcher", "Write"), "write");
+  assert.equal(activityFor("someone-custom", "Skill"), "skill");
+  assert.equal(activityFor("coder", "mcp__github__search"), "call");
+  assert.equal(moodFor("waiting_approval", false), "waiting");
+  assert.equal(moodFor("pending", true), "working");
+  assert.equal(moodFor("succeeded", false), "done");
+  assert.equal(moodFor("skipped", false), "off");
+  assert.equal(moodFor("pending", false), "idle");
+});

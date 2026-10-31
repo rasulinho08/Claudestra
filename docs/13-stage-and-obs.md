@@ -1,6 +1,7 @@
 # 13. Stage: the robot view (second monitor & OBS)
 
-An optional, playful view of a run: a little **Strativu robot** (square body, the Strativu mark as its head)
+An optional, playful view of a run: a little **Strativu robot** (the Strativu mark as its head on a slim hover body: tapered torso, glowing chest core,
+outlined arms that swing, carry parcels and cheer, and a thruster flame instead of legs)
 hops along a road between the agents' desks. It carries every handoff as a parcel, works next to the desk of
 the agent that is busy and says what that agent is doing, waits with a "?" when something needs your approval,
 and celebrates at the end of the road when the run is done.
@@ -50,12 +51,35 @@ When the app is built and served by the server (`npm run build && npm start`), u
 - One robot and one desk per agent. Loop iterations (coder ⇄ reviewer) reuse the original desks instead of
   adding new ones.
 
+## Desk workers (`apps/web/src/stage/workers.ts`)
+Every desk has the agent's own small robot (in the agent's colour) that shows what it is doing right now.
+`activityFor(agent, tool)` in `world.ts` picks the animation from the current tool, falling back to the role:
+
+| Activity | When | Animation |
+|---|---|---|
+| search | WebSearch/WebFetch, Researcher | magnifier sweeping next to a small globe |
+| read | Read/Glob/Grep | holds an open book |
+| type | Write/Edit/Bash, Coder | types on a laptop with scrolling code |
+| think / plan | no tool yet / CEO, PM, BA | thought bubble with dots / a lightbulb |
+| paint | Designer writing | easel filling with colour |
+| write | Doc Writer | pen drawing lines on paper |
+| translate | Translator | letters turning into another alphabet |
+| shout | Marketer | megaphone with sound waves |
+| chart | Data Analyst | growing bar chart |
+| test | Tester | flask with rising bubbles |
+| scan / review | Security / Reviewer | shield with a scan line / clipboard ticks |
+| blueprint | Architect | lines drawn on a blueprint |
+| skill / call | Skill tool / MCP app | glowing book / antenna waves |
+
+Moods (`moodFor`): waiting for approval raises a hand with a blinking "?", done shows happy eyes, failed shows
+crossed eyes, not started yet dozes ("z"), skipped is faded.
+
 ## How the choreography works (`apps/web/src/stage/world.ts`)
 
 | Event | What you see |
 |---|---|
 | CEO planning | Robot at HQ: "Planning the work…" |
-| `step.started` | Robot hops to that agent's desk; the desk bot bobs and the lamp pulses |
+| `step.started` | Robot hops to that agent's desk; the desk worker starts its job and the lamp pulses |
 | `tool.called` | Speech bubble: "Researcher: searching the web", "Coder: writing a file", "asking github"… |
 | `step.handoff` | Robot picks up a parcel in the sender's colour and delivers it; the road keeps a glowing trail |
 | `step.approval_requested` | Desk shows a blinking "?", robot says "Waiting for your OK…" |

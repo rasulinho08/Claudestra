@@ -207,3 +207,47 @@ export function toolLine(tool: string | undefined): string {
   }
   return tool;
 }
+
+// What a desk worker is doing, chosen from the current tool and the agent's role (drawn by draw.ts drawWorker).
+export type Activity = "type" | "read" | "search" | "think" | "paint" | "write" | "translate" | "shout" | "chart" | "test" | "scan" | "review" | "plan" | "blueprint" | "skill" | "call";
+
+const ROLE_MAKE: Record<string, Activity> = {
+  researcher: "search",
+  "business-analyst": "plan",
+  architect: "blueprint",
+  coder: "type",
+  reviewer: "review",
+  tester: "test",
+  security: "scan",
+  "doc-writer": "write",
+  "data-analyst": "chart",
+  "project-manager": "plan",
+  designer: "paint",
+  translator: "translate",
+  marketer: "shout",
+  ceo: "plan",
+};
+
+export function activityFor(agentId: string, tool: string | undefined): Activity {
+  const role = ROLE_MAKE[agentId] ?? "type";
+  if (!tool) return role === "type" ? "think" : role;
+  if (tool === "WebSearch" || tool === "WebFetch") return "search";
+  if (tool === "Read" || tool === "Glob" || tool === "Grep") return role === "review" || role === "scan" ? role : "read";
+  if (tool === "Skill") return "skill";
+  if (tool === "StructuredOutput") return "plan";
+  if (tool.startsWith("mcp__")) return "call";
+  if (tool === "Bash") return role === "test" || role === "scan" || role === "chart" ? role : "type";
+  // Write / Edit: the role's own way of making things.
+  return role === "search" || role === "review" ? "write" : role;
+}
+
+export type Mood = "idle" | "working" | "waiting" | "done" | "failed" | "off";
+
+export function moodFor(status: string, working: boolean): Mood {
+  if (status === "waiting_approval") return "waiting";
+  if (working || status === "running") return "working";
+  if (status === "succeeded") return "done";
+  if (status === "failed") return "failed";
+  if (status === "skipped" || status === "cancelled") return "off";
+  return "idle";
+}

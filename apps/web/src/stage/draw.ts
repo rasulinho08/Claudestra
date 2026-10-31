@@ -1,7 +1,8 @@
 // Canvas drawing for the stage: background, road, desks, the Strativu robot and particles.
 // Everything is simple fills and strokes (no blur filters) so it stays light on CPU/GPU.
 import { MARK_ASPECT, MARK_BODY, MARK_LINES, MARK_ORBS } from "./strativuMark.ts";
-import { WORLD_W, type Road, type Station } from "./world.ts";
+import { WORLD_W, activityFor, moodFor, type Road, type Station } from "./world.ts";
+import { drawWorker } from "./workers.ts";
 
 // Size of desks, robot and text relative to world units.
 export const UNIT = 1.45;
@@ -102,18 +103,8 @@ export function drawStation(ctx: CanvasRenderingContext2D, s: Station, state: De
   ctx.arc(x + w / 2 - 9, baseY - h + 20, 5, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
-  // Little desk bot that bobs while its agent works
-  const bob = state.working ? Math.abs(Math.sin(t * 9)) * 4 : 0;
-  drawMiniBot(ctx, x - w / 2 - 14, y - 8 - bob, s.color, state.status === "skipped" || state.status === "cancelled");
-  if (state.working) {
-    for (let i = 0; i < 3; i++) {
-      const a = t * 3 + i * 2.1;
-      ctx.fillStyle = s.color;
-      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(a * 2);
-      ctx.fillRect(x - w / 2 - 14 + Math.cos(a) * 16, y - 34 + Math.sin(a) * 6, 3, 3);
-    }
-    ctx.globalAlpha = 1;
-  }
+  // The agent's own little robot, doing its job at the desk (workers.ts).
+  drawWorker(ctx, x - w / 2 - 24, y - 4, s.color, activityFor(s.agentId, state.tool), moodFor(state.status, state.working), t, theme.dark);
   // Badges
   if (state.status === "succeeded") badge(ctx, x + w / 2 - 2, baseY - h - 2, "#22c55e", "✓");
   if (state.status === "failed") badge(ctx, x + w / 2 - 2, baseY - h - 2, "#ef4444", "✕");
@@ -141,23 +132,6 @@ function badge(ctx: CanvasRenderingContext2D, x: number, y: number, color: strin
   ctx.fillText(glyph, x, y + 1);
 }
 
-function drawMiniBot(ctx: CanvasRenderingContext2D, x: number, y: number, color: string, faded: boolean) {
-  ctx.globalAlpha = faded ? 0.4 : 1;
-  rr(ctx, x - 9, y - 18, 18, 16, 4);
-  ctx.fillStyle = color;
-  ctx.fill();
-  rr(ctx, x - 6, y - 15, 12, 7, 3);
-  ctx.fillStyle = "#0b1a33";
-  ctx.fill();
-  ctx.fillStyle = "#7fe3ff";
-  ctx.fillRect(x - 4, y - 13, 2, 3);
-  ctx.fillRect(x + 2, y - 13, 2, 3);
-  ctx.fillStyle = color;
-  ctx.fillRect(x - 7, y - 2, 4, 4);
-  ctx.fillRect(x + 3, y - 2, 4, 4);
-  ctx.globalAlpha = 1;
-}
-
 export type RobotPose = {
   x: number;
   y: number;
@@ -171,7 +145,7 @@ export type RobotPose = {
   t: number;
 };
 
-// The Strativu robot: square body, the Strativu mark as its head, a visor with smiling eyes.
+// The Strativu robot: the Strativu mark as its head (visor with smiling eyes) on a slim hover body.
 export function drawRobot(ctx: CanvasRenderingContext2D, p: RobotPose, theme: Theme) {
   if (!markBody) {
     markBody = new Path2D(MARK_BODY);
@@ -193,44 +167,91 @@ export function drawRobot(ctx: CanvasRenderingContext2D, p: RobotPose, theme: Th
   ctx.translate(x, y - p.hop);
   ctx.scale(p.facing * (2 - p.squash), p.squash);
 
-  // Legs
-  const step = p.walking ? Math.sin(p.t * 18) * 4 : 0;
-  ctx.fillStyle = "#9aa8bb";
-  rr(ctx, -14, -12 + step * 0.3, 9, 12 - step * 0.3, 3);
+  // Body designed around the Strativu head: a slim hover-bot. The torso tapers from wide shoulders (under the
+  // mark's wings) to a narrow waist and a hover pod; shoulder orbs and the chest core repeat the mark's three orbs.
+  const moving = p.walking;
+  const tilt = moving ? 0.06 : 0;
+  ctx.rotate(tilt);
+
+  // Hover pod and thruster flame (longer while moving or jumping).
+  const flame = (moving ? 13 : 6) + Math.sin(p.t * 30) * 2 + Math.min(10, p.hop * 0.3);
+  const fl = ctx.createLinearGradient(0, -8, 0, -8 + flame);
+  fl.addColorStop(0, "rgba(127,227,255,0.95)");
+  fl.addColorStop(1, "rgba(67,208,255,0)");
+  ctx.beginPath();
+  ctx.moveTo(-6, -8);
+  ctx.quadraticCurveTo(0, -8 + flame * 1.25, 6, -8);
+  ctx.closePath();
+  ctx.fillStyle = fl;
   ctx.fill();
-  rr(ctx, 5, -12 - step * 0.3, 9, 12 + step * 0.3, 3);
+  ctx.beginPath();
+  ctx.ellipse(0, -11, 11, 5, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#0a1630";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, -11, 6, 2.2, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#3cc8ff";
   ctx.fill();
 
-  // Body: rounded square
-  const body = ctx.createLinearGradient(0, -52, 0, -10);
+  // Torso
+  const torso = new Path2D();
+  torso.moveTo(-23, -47);
+  torso.quadraticCurveTo(-23, -53, -16, -54);
+  torso.lineTo(16, -54);
+  torso.quadraticCurveTo(23, -53, 23, -47);
+  torso.bezierCurveTo(22, -33, 17, -20, 9, -15);
+  torso.quadraticCurveTo(0, -12, -9, -15);
+  torso.bezierCurveTo(-17, -20, -22, -33, -23, -47);
+  torso.closePath();
+  const body = ctx.createLinearGradient(-20, -53, 16, -14);
   body.addColorStop(0, "#ffffff");
-  body.addColorStop(1, "#d5dde8");
-  rr(ctx, -22, -54, 44, 42, 10);
+  body.addColorStop(0.55, "#e4ebf4");
+  body.addColorStop(1, "#b9c7d8");
   ctx.fillStyle = body;
-  ctx.fill();
+  ctx.fill(torso);
   ctx.strokeStyle = "#8696ad";
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 1.4;
+  ctx.stroke(torso);
+  // Navy accent lines echoing the mark's inner lines: shoulders down to the core.
+  ctx.strokeStyle = "#0a1630";
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(-16, -51);
+  ctx.quadraticCurveTo(-8, -40, -4, -33);
+  ctx.moveTo(16, -51);
+  ctx.quadraticCurveTo(8, -40, 4, -33);
+  ctx.moveTo(-6, -21);
+  ctx.quadraticCurveTo(0, -18, 6, -21);
   ctx.stroke();
-  // Chest panel
-  rr(ctx, -11, -40, 22, 16, 5);
-  ctx.fillStyle = "#29b6c5";
+  // Chest core: pulses gently, brighter while working or happy.
+  const pulse = 0.5 + 0.5 * Math.sin(p.t * (p.happy ? 6 : 3));
+  ctx.beginPath();
+  ctx.arc(0, -30, 7.5, 0, Math.PI * 2);
+  ctx.fillStyle = "#0a1630";
   ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.7)";
-  ctx.fillRect(-7, -35, 6, 2);
-
-  // Arms (raised when carrying)
-  ctx.fillStyle = "#c3cedb";
-  const armUp = p.carrying ? -18 : Math.sin(p.t * 9) * (p.walking ? 4 : 1);
-  rr(ctx, -30, -46 + armUp * 0.4, 9, 20, 4);
+  const core = ctx.createRadialGradient(-1.5, -31.5, 0.5, 0, -30, 6);
+  core.addColorStop(0, "#e6fbff");
+  core.addColorStop(0.45, "#43d0ff");
+  core.addColorStop(1, "#0b62d6");
+  ctx.beginPath();
+  ctx.arc(0, -30, 5.2 + pulse * 0.6, 0, Math.PI * 2);
+  ctx.fillStyle = core;
   ctx.fill();
-  rr(ctx, 21, -46 + armUp * 0.4, 9, 20, 4);
+  // Arms in front of the body: outlined white limbs with navy hands, swinging while moving. When carrying, they are
+  // drawn after the head (holding the packet up), see below.
+  if (!p.carrying) drawArms(ctx, p, false);
+  // Neck collar under the head.
+  ctx.beginPath();
+  ctx.ellipse(0, -53, 9, 3, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#0a1630";
   ctx.fill();
+  ctx.rotate(-tilt);
 
   // Head: the Strativu mark
   const hw = 66;
   const hh = hw * MARK_ASPECT;
   ctx.save();
-  ctx.translate(-hw / 2, -54 - hh + 6);
+  ctx.translate(-hw / 2, -54 - hh + 7 + (p.walking ? Math.sin(p.t * 18) * 0.8 : 0));
   ctx.scale(hw, hw);
   const g = ctx.createLinearGradient(0, 0, 0, MARK_ASPECT);
   g.addColorStop(0, "#43d0ff");
@@ -270,6 +291,7 @@ export function drawRobot(ctx: CanvasRenderingContext2D, p: RobotPose, theme: Th
   ctx.restore();
 
   // Packet held above the head
+  if (p.carrying) drawArms(ctx, p, true);
   if (p.carrying) {
     const by = -54 - hh - 18 + Math.sin(p.t * 10) * 2;
     rr(ctx, -13, by, 26, 18, 4);
@@ -285,6 +307,38 @@ export function drawRobot(ctx: CanvasRenderingContext2D, p: RobotPose, theme: Th
   }
   ctx.restore();
   ctx.restore();
+}
+
+function drawArms(ctx: CanvasRenderingContext2D, p: RobotPose, up: boolean) {
+  const swing = p.walking ? Math.sin(p.t * 9) * 5 : Math.sin(p.t * 2) * 1;
+  for (const side of [-1, 1] as const) {
+    const s = { x: side * 21, y: -46 };
+    // Carrying: hands hold the packet above the head. Happy (task done): a small cheer with both arms up.
+    const cheer = !up && p.happy && !p.walking;
+    const wave = cheer ? Math.sin(p.t * 8) * 3 : 0;
+    const e = up ? { x: side * 36, y: -72 } : cheer ? { x: side * 33, y: -50 } : { x: side * 30, y: -34 + swing * side };
+    const h = up ? { x: side * 15, y: -104 } : cheer ? { x: side * 40 + wave * side, y: -64 - wave } : { x: side * 28, y: -22 + swing * side * 1.4 };
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (const [w, c] of [[7.5, "#8696ad"], [5, "#eef3f9"]] as const) {
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(e.x, e.y);
+      ctx.lineTo(h.x, h.y);
+      ctx.lineWidth = w;
+      ctx.strokeStyle = c;
+      ctx.stroke();
+    }
+    // Elbow joint and hand.
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, 2.4, 0, Math.PI * 2);
+    ctx.fillStyle = "#3cc8ff";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = "#0a1630";
+    ctx.fill();
+  }
 }
 
 export function drawBubble(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, theme: Theme, accent = "#43d0ff") {
