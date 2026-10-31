@@ -45,6 +45,7 @@ code { font-size: 12px; }
 .nav a:hover { background: var(--panel-2); color: var(--text); }
 .nav a.active { color: var(--text); background: var(--panel-2); }
 .stage-link { margin-left: auto; text-decoration: none; font-size: 13px; }
+.lang-switch { font-size: 12px; padding: 2px 4px; }
 .badge { border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--muted); }
 .badge-warn { border-color: var(--accent); color: var(--accent); }
 .banner { background: color-mix(in srgb, var(--accent) 14%, transparent); padding: 6px 16px; font-size: 12px; border-bottom: 1px solid var(--border); }

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, errorText } from "../api.ts";
 import { go } from "../router.ts";
+import { t } from "../i18n.ts";
 
 type Note = { id: string; text: string; createdAt: string };
 type Remembered = { runId: string; prompt: string; summary: string; createdAt: string };
@@ -33,7 +34,7 @@ export function MemoryPage() {
   return (
     <div className="page-scroll">
       <div className="page-narrow">
-        <h2>Memory</h2>
+        <h2>{t("nav.memory")}</h2>
         {data && !data.enabled && <div className="banner">Memory is off (MEMORY=off in .env).</div>}
         {error && <div className="error small">{error}</div>}
         <h3>Company notes</h3>

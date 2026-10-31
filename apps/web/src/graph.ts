@@ -3,6 +3,7 @@ import { Graph, layout } from "@dagrejs/dagre";
 import type { Edge, Node } from "@xyflow/react";
 import { CEO_FINAL_STEP, CEO_PLAN_STEP, type AgentInfo } from "@claudestra/protocol";
 import type { RunView, StepView } from "./run-state.ts";
+import { agentName } from "./i18n.ts";
 
 export const NODE_WIDTH = 230;
 export const NODE_HEIGHT = 104;
@@ -13,7 +14,9 @@ export type StepNode = Node<StepNodeData, "step">;
 const FALLBACK_AGENT = (id: string): AgentInfo => ({ id, name: id === "claude-code" ? "Claude Code" : id, description: "", color: "#8a92a6", icon: "bot", modelClass: "mid" });
 
 export function agentFor(run: RunView, agentId: string): AgentInfo {
-  return run.agents[agentId] ?? FALLBACK_AGENT(agentId);
+  const info = run.agents[agentId] ?? FALLBACK_AGENT(agentId);
+  const name = agentName(agentId, info.name);
+  return name === info.name ? info : { ...info, name };
 }
 
 function edgeList(run: RunView): Array<{ from: string; to: string }> {

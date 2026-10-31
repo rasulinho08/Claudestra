@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, errorText } from "../api.ts";
+import { t } from "../i18n.ts";
 
 type Server = { id: string; description: string; type: string; status: "ready" | "missing_secret" | "invalid"; missing: string[]; readTools: string[]; usedBy: string[] };
 
@@ -20,7 +21,7 @@ export function AppsPage() {
   return (
     <div className="page-scroll">
       <div className="page-narrow">
-        <h2>Apps (MCP integrations)</h2>
+        <h2>{t("page.apps")}</h2>
         <p className="muted small">
           Apps are MCP servers listed in <code>integrations.json</code> (copy <code>integrations.example.json</code>). Values like <code>{"${GITHUB_TOKEN}"}</code> come from
           your <code>.env</code>, so no secret is stored in the file. An agent gets an app by listing it in its <code>integrations</code>, for example{" "}

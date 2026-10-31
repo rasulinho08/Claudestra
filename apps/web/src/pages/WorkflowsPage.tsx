@@ -3,6 +3,7 @@ import type { ApprovalMode, Profile } from "@claudestra/protocol";
 import { api, errorText } from "../api.ts";
 import { go } from "../router.ts";
 import { WorkflowEditor, type EditorStep } from "../WorkflowEditor.tsx";
+import { t } from "../i18n.ts";
 
 type Param = { key: string; label: string; default: string };
 type Workflow = {
@@ -136,7 +137,7 @@ export function WorkflowsPage() {
     <div className="lib-page">
       <div className="lib-list">
         <div className="lib-head">
-          <h2>Workflows</h2>
+          <h2>{t("nav.workflows")}</h2>
         </div>
         <div className="row-gap">
           <button className="btn-primary" onClick={createBlank}>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, errorText } from "../api.ts";
 import { iconFor } from "../icons.ts";
+import { t } from "../i18n.ts";
 
 type Agent = {
   id: string; name: string; description: string; color: string; icon: string; modelClass: string;
@@ -65,7 +66,7 @@ export function AgentsPage() {
     <div className="lib-page">
       <div className="lib-list">
         <div className="lib-head">
-          <h2>Agents</h2>
+          <h2>{t("nav.agents")}</h2>
           <button className="ghost" onClick={create}>
             + New agent
           </button>

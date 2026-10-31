@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, errorText } from "../api.ts";
+import { t } from "../i18n.ts";
 
 type Skill = { name: string; description: string; usedBy: string[] };
 
@@ -57,7 +58,7 @@ export function SkillsPage() {
     <div className="lib-page">
       <div className="lib-list">
         <div className="lib-head">
-          <h2>Skills</h2>
+          <h2>{t("nav.skills")}</h2>
           <button className="ghost" onClick={create}>
             + New skill
           </button>

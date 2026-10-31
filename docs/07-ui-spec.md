@@ -64,6 +64,14 @@ An alternative to the canvas: the Strativu robot hops between agent desks, carri
 approvals and completion. Switch with Graph / Stage, pop out with ↗, or open `#/stage?run=live` on a second
 monitor / as an OBS browser source. Details in [doc 13](13-stage-and-obs.md).
 
+## Language
+- The interface is available in English and Azerbaijani (`apps/web/src/i18n.ts`, plain dictionaries). The AZ/EN
+  switch in the top bar is saved in the browser (`claudestra.lang`); the first visit follows the browser language.
+- Built-in agents get translated display names (Proqramçı, Tədqiqatçı, Rəyçi…); custom agents keep the name from their file.
+- The composer has an **answer language** select (auto, az, en, ru, tr). It is sent as `language` in `POST /api/runs`
+  and recorded in `run.started`; the orchestrator adds a rule to every prompt (code and file names stay English).
+  `auto` answers in the language of the request.
+
 ## Design principles
 - Calm, dense, dark-first; color = agent identity, brightness = activity.
 - Everything clickable leads to the raw data (no black boxes).

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { RunView } from "../run-state.ts";
 import { agentFor } from "../graph.ts";
+import { t, type Key } from "../i18n.ts";
 import { usd } from "../format.ts";
 import { UNIT, drawBackground, drawBubble, drawParticles, drawRobot, drawStation, drawTrail, stepParticles, type Particle, type Theme } from "./draw.ts";
 import { Director, FINISH, HQ, WORLD_W, layoutFor, pointAt, stationKeyOf, toolLine, worldHeightFor, type Layout, type Trip } from "./world.ts";
@@ -195,19 +196,19 @@ export function Stage({ run, transparent = false, hud = true, fps = 30, theme }:
     };
 
     const bubbleText = (r: RunView): { text: string; accent?: string } | null => {
-      if (r.status === "completed" && robot.at === FINISH && robot.phase === "idle") return { text: `Done! ${usd(r.costUsd)}`, accent: "#22c55e" };
-      if (r.status === "failed") return { text: "Something went wrong", accent: "#ef4444" };
-      if (r.status === "cancelled") return { text: "Stopped" };
-      if (r.paused) return { text: "Paused ⏸", accent: "#f59e0b" };
-      if (r.pending.length > 0) return { text: "Waiting for your OK…", accent: "#f59e0b" };
-      if (robot.carrying && robot.trip?.kind === "carry") return { text: `Delivering to ${layout?.byKey.get(robot.trip.to)?.label ?? "…"}` };
+      if (r.status === "completed" && robot.at === FINISH && robot.phase === "idle") return { text: t("stage.done", { cost: usd(r.costUsd) }), accent: "#22c55e" };
+      if (r.status === "failed") return { text: t("stage.wrong"), accent: "#ef4444" };
+      if (r.status === "cancelled") return { text: t("stage.stopped") };
+      if (r.paused) return { text: t("stage.paused"), accent: "#f59e0b" };
+      if (r.pending.length > 0) return { text: t("stage.waiting"), accent: "#f59e0b" };
+      if (robot.carrying && robot.trip?.kind === "carry") return { text: t("stage.delivering", { name: layout?.byKey.get(robot.trip.to)?.label ?? "…" }) };
       if (robot.phase !== "idle") return null;
       // Working at a desk: say what the agent there is doing.
       const here = r.order.filter((id) => stationKeyOf(r.steps[id], id) === robot.at && (r.steps[id]?.status === "running" || r.steps[id]?.status === "waiting_approval"));
       const step = here.length ? r.steps[here[here.length - 1]!] : undefined;
       if (!step) return r.status === "running" ? { text: "…" } : null;
-      if (step.id === "ceo") return { text: step.lastTool === "StructuredOutput" ? "Plan ready!" : "Planning the work…" };
-      if (step.id === "final") return { text: "Writing the answer…" };
+      if (step.id === "ceo") return { text: step.lastTool === "StructuredOutput" ? t("stage.planReady") : t("stage.planning") };
+      if (step.id === "final") return { text: t("stage.writingAnswer") };
       return { text: `${agentFor(r, step.agentId).name}: ${toolLine(step.lastTool)}`, accent: agentFor(r, step.agentId).color };
     };
 
@@ -279,12 +280,12 @@ export function Stage({ run, transparent = false, hud = true, fps = 30, theme }:
       {hud && (
         <div className="stage-hud">
           <div className="stage-title">
-            <span className={`status status-${run.paused ? "paused" : run.status}`}>{run.paused ? "paused" : run.status}</span>
+            <span className={`status status-${run.paused ? "paused" : run.status}`}>{t(`status.${run.paused ? "paused" : run.status}` as Key)}</span>
             <span className="stage-prompt">{run.prompt}</span>
           </div>
           <div className="stage-meta">
             {usd(run.costUsd) || "$0"}
-            {active.length > 0 && ` · ${active.map((s) => agentFor(run, s.agentId).name).join(", ")} working`}
+            {active.length > 0 && ` · ${t("stage.working", { names: active.map((s) => agentFor(run, s.agentId).name).join(", ") })}`}
           </div>
         </div>
       )}

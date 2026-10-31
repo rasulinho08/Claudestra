@@ -2,6 +2,7 @@
 // The world is a fixed 1280×720 box; the canvas scales it to fit.
 import { CEO_FINAL_STEP, CEO_PLAN_STEP } from "@claudestra/protocol";
 import type { RunView, StepView } from "../run-state.ts";
+import { t, type Key } from "../i18n.ts";
 
 export const WORLD_W = 1280;
 export const WORLD_H = 720;
@@ -119,13 +120,13 @@ export function layoutFor(run: RunView, agentInfo: (agentId: string) => { name: 
   });
   const ceo = agentInfo("ceo");
   const stations: Station[] = [
-    { key: HQ, label: "HQ · CEO", color: ceo.color, icon: "crown", agentId: "ceo", pos: stops[0]!, dist: stationDist[0]! },
+    { key: HQ, label: t("stage.hq"), color: ceo.color, icon: "crown", agentId: "ceo", pos: stops[0]!, dist: stationDist[0]! },
     ...keys.map((key, i) => {
       const step = run.steps[key];
       const info = agentInfo(step?.agentId ?? key);
       return { key, label: info.name, color: info.color, icon: info.icon, agentId: step?.agentId ?? key, pos: stops[i + 1]!, dist: stationDist[i + 1]! };
     }),
-    { key: FINISH, label: "Delivery", color: ceo.color, icon: "flag", agentId: "ceo", pos: stops[stops.length - 1]!, dist: stationDist[stops.length - 1]! },
+    { key: FINISH, label: t("stage.delivery"), color: ceo.color, icon: "flag", agentId: "ceo", pos: stops[stops.length - 1]!, dist: stationDist[stops.length - 1]! },
   ];
   return { key: `${keys.join("|")}@${worldH}`, stations, road, byKey: new Map(stations.map((s) => [s.key, s])) };
 }
@@ -185,24 +186,24 @@ export class Director {
   }
 }
 
-const TOOL_LINES: Array<[RegExp, string]> = [
-  [/^StructuredOutput$/, "making a plan"],
-  [/^WebSearch$/, "searching the web"],
-  [/^WebFetch$/, "reading a page"],
-  [/^Read$/, "reading files"],
-  [/^(Glob|Grep)$/, "looking around"],
-  [/^Write$/, "writing a file"],
-  [/^Edit$/, "editing"],
-  [/^Bash$/, "running a command"],
-  [/^Skill$/, "opening a skill"],
-  [/^mcp__([a-z0-9-]+)__/, "asking $1"],
+const TOOL_LINES: Array<[RegExp, Key]> = [
+  [/^StructuredOutput$/, "tool.plan"],
+  [/^WebSearch$/, "tool.search"],
+  [/^WebFetch$/, "tool.fetch"],
+  [/^Read$/, "tool.read"],
+  [/^(Glob|Grep)$/, "tool.look"],
+  [/^Write$/, "tool.write"],
+  [/^Edit$/, "tool.edit"],
+  [/^Bash$/, "tool.bash"],
+  [/^Skill$/, "tool.skill"],
+  [/^mcp__([a-z0-9-]+)__/, "tool.mcp"],
 ];
 
 export function toolLine(tool: string | undefined): string {
-  if (!tool) return "thinking…";
-  for (const [re, text] of TOOL_LINES) {
+  if (!tool) return t("tool.thinking");
+  for (const [re, key] of TOOL_LINES) {
     const m = re.exec(tool);
-    if (m) return text.replace("$1", m[1] ?? "");
+    if (m) return t(key, { name: m[1] ?? "" });
   }
   return tool;
 }

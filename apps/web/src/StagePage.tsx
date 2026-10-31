@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { RunSummary } from "@claudestra/protocol";
 import { useRunEvents } from "./useRunEvents.ts";
 import { Stage } from "./stage/Stage.tsx";
+import { t } from "./i18n.ts";
 
 // Chromeless stage for a second monitor or an OBS browser source (docs/13):
 //   #/stage?run=live            follow the newest run automatically (default)
@@ -40,7 +41,7 @@ export function StagePage({ params }: { params: URLSearchParams }) {
       ) : (
         <div className="empty">
           <h1>Claudestra stage</h1>
-          <p className="muted">Waiting for a run… start one in the main window.</p>
+          <p className="muted">{t("stage.waitRun")}</p>
         </div>
       )}
     </div>

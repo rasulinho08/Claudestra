@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, errorText } from "./api.ts";
+import { t } from "./i18n.ts";
 
 type Entry = { path: string; bytes: number; modified: string };
 
@@ -23,7 +24,7 @@ export function FilesPanel({ runId, refreshKey }: { runId: string; refreshKey: n
   }, [runId, open, refreshKey]);
 
   if (error) return <div className="error small">{error}</div>;
-  if (files.length === 0) return <p className="muted small">No files in this run's workspace yet.</p>;
+  if (files.length === 0) return <p className="muted small">{t("files.none")}</p>;
   return (
     <div className="files">
       <div className="file-list">
@@ -37,7 +38,7 @@ export function FilesPanel({ runId, refreshKey }: { runId: string; refreshKey: n
       {open && (
         <div className="file-view">
           <div className="small muted">{open}</div>
-          {!content ? <p className="muted small">Loading…</p> : content.binary ? <p className="muted small">Binary file</p> : <pre className="code">{content.content}{content.truncated && "\n… [truncated]"}</pre>}
+          {!content ? <p className="muted small">{t("files.loading")}</p> : content.binary ? <p className="muted small">{t("files.binary")}</p> : <pre className="code">{content.content}{content.truncated && "\n… [truncated]"}</pre>}
         </div>
       )}
     </div>

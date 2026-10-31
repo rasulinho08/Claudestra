@@ -7,6 +7,7 @@ import { FilesPanel } from "./FilesPanel.tsx";
 import { seconds, tokens, usd } from "./format.ts";
 import { api, errorText } from "./api.ts";
 import { go } from "./router.ts";
+import { t, type Key } from "./i18n.ts";
 
 // SDK apiKeySource values → readable labels ("none" means the claude.ai login, not "no auth").
 const AUTH_LABEL: Record<string, string> = {
@@ -31,13 +32,13 @@ export function Inspector({ run, runId, selection, onSelect, onDecide }: Props) 
     <div className="inspector">
       <div className="tabs">
         <button className={tab === "step" ? "active" : ""} onClick={() => onSelect(run.order[0] ? { kind: "step", id: run.order[0] } : null)}>
-          Step
+          {t("insp.step")}
         </button>
         <button className={tab === "files" ? "active" : ""} onClick={() => onSelect({ kind: "files" })}>
-          Files
+          {t("insp.files")}
         </button>
         <button className={tab === "answer" ? "active" : ""} disabled={!hasAnswer} onClick={() => onSelect({ kind: "answer" })}>
-          Answer
+          {t("insp.answer")}
         </button>
       </div>
       <div className="inspector-body">
@@ -48,28 +49,28 @@ export function Inspector({ run, runId, selection, onSelect, onDecide }: Props) 
 }
 
 function SaveWorkflow({ runId }: { runId: string }) {
-  const [state, setState] = useState<string | null>(null);
+  const [state, setState] = useState<{ text: string; saved: boolean } | null>(null);
   async function save() {
-    const name = window.prompt("Name for this workflow", "My workflow");
+    const name = window.prompt(t("insp.workflowName"), t("insp.myWorkflow"));
     if (!name) return;
     try {
       await api("/api/workflows", { body: { fromRunId: runId, name } });
-      setState("Saved. Open Workflows to run it again.");
+      setState({ text: t("insp.saved"), saved: true });
     } catch (err) {
-      setState(errorText(err));
+      setState({ text: errorText(err), saved: false });
     }
   }
   return (
     <div className="save-wf">
       <button className="ghost" onClick={save}>
-        ☆ Save as workflow
+        {t("insp.saveWorkflow")}
       </button>
       {state && (
         <span className="small muted">
-          {state}{" "}
-          {state.startsWith("Saved") && (
+          {state.text}{" "}
+          {state.saved && (
             <a href="#/workflows" onClick={() => go("workflows")}>
-              Workflows →
+              {t("insp.toWorkflows")}
             </a>
           )}
         </span>
@@ -85,8 +86,8 @@ function body(run: RunView, runId: string, selection: Selection, onDecide: Decid
       <>
         <div className="answer">{run.answer}</div>
         <div className="muted small answer-meta">
-          {usd(run.costUsd)} · {run.durationMs !== undefined && seconds(run.durationMs)} · {Object.keys(run.steps).length} steps
-          {run.plan && ` · route ${run.plan.route}`}
+          {usd(run.costUsd)} · {run.durationMs !== undefined && seconds(run.durationMs)} · {t("insp.steps", { n: Object.keys(run.steps).length })}
+          {run.plan && ` · ${t("insp.route", { route: run.plan.route })}`}
           {run.profile && ` · ${run.profile}`}
         </div>
         {run.plan?.route === "team" && run.mode !== "workflow" && <SaveWorkflow runId={runId} />}
@@ -100,12 +101,12 @@ function body(run: RunView, runId: string, selection: Selection, onDecide: Decid
         <h3 className="insp-title">
           {selection.from} → {selection.to}
         </h3>
-        {handoff ? <pre className="card">{handoff.summary}</pre> : <p className="muted small">No handoff yet; it appears when {selection.to} starts.</p>}
+        {handoff ? <pre className="card">{handoff.summary}</pre> : <p className="muted small">{t("insp.noHandoff", { id: selection.to })}</p>}
       </>
     );
   }
   const step = selection?.kind === "step" ? run.steps[selection.id] : undefined;
-  if (!step) return <p className="muted small">Click a node to see what that agent is doing.</p>;
+  if (!step) return <p className="muted small">{t("insp.pick")}</p>;
   const agent = agentFor(run, step.agentId);
   const planStep = run.plan?.steps.find((s) => s.id === step.id);
   return (
@@ -113,26 +114,26 @@ function body(run: RunView, runId: string, selection: Selection, onDecide: Decid
       <h3 className="insp-title" style={{ color: agent.color }}>
         {iconFor(agent.icon)} {agent.name}{" "}
         <span className="muted small">
-          · {step.id} · {step.status.replace("_", " ")}
-          {step.iteration ? ` · round ${step.iteration}` : ""}
-          {step.attempt && step.attempt > 1 ? ` · attempt ${step.attempt}` : ""}
+          · {step.id} · {t(`step.${step.status}` as Key)}
+          {step.iteration ? ` · ${t("insp.round", { n: step.iteration })}` : ""}
+          {step.attempt && step.attempt > 1 ? ` · ${t("insp.attempt", { n: step.attempt })}` : ""}
         </span>
       </h3>
       <div className="insp-meta small muted">
         {step.model && <span>{step.model}</span>}
-        {step.authSource && <span title="Credential the engine used for this step">auth: {AUTH_LABEL[step.authSource] ?? step.authSource}</span>}
+        {step.authSource && <span title={t("insp.authTitle")}>{t("insp.auth", { source: AUTH_LABEL[step.authSource] ?? step.authSource })}</span>}
         <span>
           ⬆ {tokens(step.usage.inputTokens)} ⬇ {tokens(step.usage.outputTokens)} ⟳ {tokens(step.usage.cacheReadTokens)}
         </span>
         {step.costUsd !== null && <span>{usd(step.costUsd)}</span>}
-        {step.skills.length > 0 && <span>skills: {step.skills.join(", ")}</span>}
+        {step.skills.length > 0 && <span>{t("insp.skills", { list: step.skills.join(", ") })}</span>}
       </div>
       {step.task && (
         <div className="card task">
-          <div className="small muted">Task</div>
+          <div className="small muted">{t("insp.task")}</div>
           {step.task}
-          {planStep?.successCriteria && <div className="small muted">Success: {planStep.successCriteria}</div>}
-          {planStep?.loopBackTo && <div className="small muted">Sends {planStep.loopBackTo} back for fixes if it requests changes</div>}
+          {planStep?.successCriteria && <div className="small muted">{t("insp.success", { text: planStep.successCriteria })}</div>}
+          {planStep?.loopBackTo && <div className="small muted">{t("insp.loop", { id: planStep.loopBackTo })}</div>}
         </div>
       )}
       {step.note && <div className="denied small">{step.note}</div>}

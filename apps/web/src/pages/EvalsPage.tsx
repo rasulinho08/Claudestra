@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, errorText } from "../api.ts";
 import { go } from "../router.ts";
 import { usd } from "../format.ts";
+import { t } from "../i18n.ts";
 
 type Suite = { file: string; name: string; description: string; profile: string; cases: { id: string; prompt: string }[]; error?: string };
 type CaseResult = { caseId: string; runId: string | null; passed: boolean; costUsd: number | null; checks: { check: string; passed: boolean; detail: string }[] };
@@ -40,7 +41,7 @@ export function EvalsPage() {
   return (
     <div className="page-scroll">
       <div className="page-narrow">
-        <h2>Evals</h2>
+        <h2>{t("nav.evals")}</h2>
         <p className="muted small">
           A suite is a list of prompts with checks (route, answer contains, file exists, max cost, agents used…) in <code>evals/*.json</code>. Cases run one at a time as normal runs
           (default profile eco, auto-approve), so they cost money: the smoke suite is a few cents.

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, errorText } from "../api.ts";
 import { usd } from "../format.ts";
 import { go } from "../router.ts";
+import { t } from "../i18n.ts";
 
 type Analytics = {
   totals: { runs: number; costUsd: number; steps: number };
@@ -53,7 +54,7 @@ export function CostsPage() {
     <div className="page-scroll">
       <div className="page-narrow">
         <div className="lib-head">
-          <h2>Costs</h2>
+          <h2>{t("nav.costs")}</h2>
           <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
             {[7, 30, 90, 365].map((d) => (
               <option key={d} value={d}>

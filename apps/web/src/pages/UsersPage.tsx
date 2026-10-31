@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { Role } from "@claudestra/protocol";
 import { api, errorText } from "../api.ts";
+import { t } from "../i18n.ts";
 
 type User = { id: string; name: string; role: Role; createdAt: string; lastSeen: string | null };
 
@@ -37,7 +38,7 @@ export function UsersPage({ authEnabled }: { authEnabled: boolean }) {
   return (
     <div className="page-scroll">
       <div className="page-narrow">
-        <h2>Users</h2>
+        <h2>{t("nav.users")}</h2>
         <p className="muted small">
           Login is <strong>{authEnabled ? "on" : "off"}</strong>. It turns on when <code>AUTH_TOKEN</code> is set in .env or once a user exists. Roles: <strong>owner</strong>{" "}
           (everything), <strong>operator</strong> (start runs, approve, run workflows and evals), <strong>viewer</strong> (read only). Needed before you open Claudestra to other people

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import type { ApprovalMode, ClaudestraEvent, HealthResponse, Profile, RunSummary } from "@claudestra/protocol";
+import type { AnswerLanguage, ApprovalMode, ClaudestraEvent, HealthResponse, Profile, RunSummary } from "@claudestra/protocol";
 import { useRunEvents } from "./useRunEvents.ts";
 import { activeStep, emptyRun, reduceRun, totalUsage, type RunView } from "./run-state.ts";
 import { Canvas } from "./Canvas.tsx";
@@ -9,6 +9,7 @@ import { Stage } from "./stage/Stage.tsx";
 import { seconds, tokens, usd } from "./format.ts";
 import { api, errorText } from "./api.ts";
 import { agentFor } from "./graph.ts";
+import { agentName, lang, t, type Key } from "./i18n.ts";
 
 const VIEW_KEY = "claudestra.view";
 const OPTS_KEY = "claudestra.runOptions";
@@ -39,7 +40,9 @@ export function RunsPage({ health, initialRun }: { health: HealthResponse | null
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [view, setView] = useState<"graph" | "stage">(() => load(VIEW_KEY, { view: "graph" as "graph" | "stage" }).view);
-  const [opts, setOpts] = useState<{ profile: Profile | ""; approvalMode: ApprovalMode | "" }>(() => load(OPTS_KEY, { profile: "", approvalMode: "" }));
+  const [opts, setOpts] = useState<{ profile: Profile | ""; approvalMode: ApprovalMode | ""; language: AnswerLanguage }>(() =>
+    load(OPTS_KEY, { profile: "", approvalMode: "", language: (lang() === "az" ? "az" : "auto") as AnswerLanguage }),
+  );
   const [cursor, setCursor] = useState<number | null>(null);
   const live = useRunEvents(runId);
 
@@ -97,7 +100,7 @@ export function RunsPage({ health, initialRun }: { health: HealthResponse | null
     setSending(true);
     setError(null);
     try {
-      const body = await api<{ runId: string }>("/api/runs", { body: { prompt, profile, approvalMode } });
+      const body = await api<{ runId: string }>("/api/runs", { body: { prompt, profile, approvalMode, language: opts.language } });
       openRun(body.runId);
       setPrompt("");
       refreshRuns();
@@ -111,7 +114,7 @@ export function RunsPage({ health, initialRun }: { health: HealthResponse | null
   const decide = useCallback(
     (approvalId: string, decision: "approve" | "approve_run" | "reject") => {
       if (!runId) return;
-      const note = decision === "reject" ? (window.prompt("Optional note for the agent (why rejected)?") ?? "") : "";
+      const note = decision === "reject" ? (window.prompt(t("approval.rejectNote")) ?? "") : "";
       api(`/api/runs/${runId}/approvals/${approvalId}`, { body: { decision, note } }).catch((err) => setError(errorText(err)));
     },
     [runId],
@@ -124,13 +127,13 @@ export function RunsPage({ health, initialRun }: { health: HealthResponse | null
   return (
     <div className="runs-page">
       <aside className="sidebar">
-        <div className="sidebar-title">Runs</div>
-        {runs.length === 0 && <p className="muted small">No runs yet.</p>}
+        <div className="sidebar-title">{t("runs.title")}</div>
+        {runs.length === 0 && <p className="muted small">{t("runs.none")}</p>}
         {runs.map((r) => (
           <button key={r.id} className={`run-item ${r.id === runId ? "active" : ""}`} onClick={() => openRun(r.id)}>
             <span className={`dot dot-${r.status}`} />
             <span className="run-prompt">{r.prompt}</span>
-            <span className="muted small">{r.source === "observer" ? "observer" : usd(r.costUsd)}</span>
+            <span className="muted small">{r.source === "observer" ? t("runs.observer") : usd(r.costUsd)}</span>
           </button>
         ))}
       </aside>
@@ -182,7 +185,7 @@ export function RunsPage({ health, initialRun }: { health: HealthResponse | null
       <form className="composer" onSubmit={send}>
         <textarea
           value={prompt}
-          placeholder={disabled ? "Runs are disabled in this AUTH_MODE" : "Give the company a task… (Ctrl+Enter to send)"}
+          placeholder={disabled ? t("composer.disabled") : t("composer.placeholder")}
           disabled={disabled}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => {
@@ -190,15 +193,22 @@ export function RunsPage({ health, initialRun }: { health: HealthResponse | null
           }}
         />
         <div className="composer-side">
-          <div className="segmented" role="group" aria-label="Approval mode">
+          <div className="segmented" role="group" aria-label={t("composer.mode")}>
             {(["manual", "smart", "auto"] as const).map((m) => (
-              <button type="button" key={m} className={approvalMode === m ? `active mode-${m}` : ""} onClick={() => setOption({ approvalMode: m })} title={MODE_HELP[m]}>
-                {m}
+              <button type="button" key={m} className={approvalMode === m ? `active mode-${m}` : ""} onClick={() => setOption({ approvalMode: m })} title={t(`modeHelp.${m}`)}>
+                {t(`mode.${m}`)}
               </button>
             ))}
           </div>
+          <select value={opts.language} onChange={(e) => setOption({ language: e.target.value as AnswerLanguage })} title={t("composer.answerLang")} aria-label={t("composer.answerLang")}>
+            {(["auto", "az", "en", "ru", "tr"] as const).map((l) => (
+              <option key={l} value={l}>
+                {t(`lang.${l}`)}
+              </option>
+            ))}
+          </select>
           <div className="composer-row">
-            <select value={profile} onChange={(e) => setOption({ profile: e.target.value as Profile })} title="Cost profile">
+            <select value={profile} onChange={(e) => setOption({ profile: e.target.value as Profile })} title={t("composer.profile")}>
               {(["eco", "balanced", "max"] as const).map((p) => (
                 <option key={p} value={p}>
                   {p}
@@ -207,7 +217,7 @@ export function RunsPage({ health, initialRun }: { health: HealthResponse | null
               ))}
             </select>
             <button type="submit" disabled={!prompt.trim() || sending || disabled}>
-              {sending ? "Sending…" : "Send"}
+              {sending ? t("composer.sending") : t("composer.send")}
             </button>
           </div>
         </div>
@@ -218,12 +228,6 @@ export function RunsPage({ health, initialRun }: { health: HealthResponse | null
     </div>
   );
 }
-
-const MODE_HELP: Record<ApprovalMode, string> = {
-  manual: "Approve the plan first, and every risky action",
-  smart: "Plan runs on its own; risky actions ask",
-  auto: "Auto-approve everything except the never-auto list (sandbox and budgets still apply)",
-};
 
 function RunBar(p: {
   run: RunView;
@@ -240,14 +244,14 @@ function RunBar(p: {
   const live = run.status === "running";
   return (
     <div className="run-bar">
-      <span className={`status status-${run.paused ? "paused" : run.status}`}>{p.replaying ? "replay" : run.paused ? "paused" : run.status}</span>
-      {run.approvalMode === "auto" && live && !p.replaying && <span className="chip chip-auto">AUTO-APPROVE</span>}
+      <span className={`status status-${run.paused ? "paused" : run.status}`}>{t(`status.${p.replaying ? "replay" : run.paused ? "paused" : run.status}` as Key)}</span>
+      {run.approvalMode === "auto" && live && !p.replaying && <span className="chip chip-auto">{t("bar.autoApprove")}</span>}
       {run.profile && <span className="chip">{run.profile}</span>}
-      {run.mode === "workflow" && <span className="chip">workflow</span>}
+      {run.mode === "workflow" && <span className="chip">{t("bar.workflow")}</span>}
       <span className="run-bar-prompt" title={run.prompt}>
         {run.prompt}
       </span>
-      <span className="nums" title="input / output / cache-read tokens">
+      <span className="nums" title={t("bar.tokens")}>
         ⬆{tokens(u.inputTokens)} ⬇{tokens(u.outputTokens)} ⟳{tokens(u.cacheReadTokens)}
       </span>
       <span className="nums">
@@ -256,32 +260,32 @@ function RunBar(p: {
       </span>
       {run.durationMs !== undefined && <span className="muted nums">{seconds(run.durationMs)}</span>}
       <div className="segmented small-seg">
-        <button className={p.view === "graph" ? "active" : ""} onClick={() => p.onView("graph")} title="Node graph">
-          Graph
+        <button className={p.view === "graph" ? "active" : ""} onClick={() => p.onView("graph")} title={t("bar.graphTitle")}>
+          {t("bar.graph")}
         </button>
-        <button className={p.view === "stage" ? "active" : ""} onClick={() => p.onView("stage")} title="Animated robot stage">
-          Stage
+        <button className={p.view === "stage" ? "active" : ""} onClick={() => p.onView("stage")} title={t("bar.stageTitle")}>
+          {t("bar.stage")}
         </button>
       </div>
       <button
         className="ghost"
-        title="Open the stage in a new window (second monitor / OBS)"
+        title={t("bar.popout")}
         onClick={() => window.open(`#/stage?run=${p.runId}`, "claudestra-stage", "width=1280,height=720")}
       >
         ↗
       </button>
       {!p.follow && (
-        <button className="ghost" onClick={p.onFollow} title="Follow the active agent">
-          Follow
+        <button className="ghost" onClick={p.onFollow} title={t("bar.followTitle")}>
+          {t("bar.follow")}
         </button>
       )}
       {live && !p.replaying && (
         <>
           <button className="ghost" onClick={() => p.onControl(run.paused ? "resume" : "pause")}>
-            {run.paused ? "Resume" : "Pause"}
+            {run.paused ? t("bar.resume") : t("bar.pause")}
           </button>
           <button className="ghost" onClick={() => p.onControl("cancel")}>
-            Stop
+            {t("bar.stop")}
           </button>
         </>
       )}
@@ -305,7 +309,7 @@ function ApprovalBar({ run, onDecide, onOpen }: { run: RunView; onDecide: (id: s
               {agent.name}
             </button>
             <span>
-              wants <strong>{p.tool}</strong>: <code>{what}</code>
+              {t("approval.wants")} <strong>{p.tool}</strong>: <code>{what}</code>
             </span>
             <span className="muted small">{p.reason}</span>
             <ApprovalButtons onDecide={(d) => onDecide(p.approvalId, d)} />
@@ -322,7 +326,7 @@ function PlanApproval({ run, onDecide }: { run: RunView; onDecide: (id: string, 
   return (
     <div className="modal-backdrop">
       <div className="modal">
-        <h3>Approve the plan?</h3>
+        <h3>{t("approval.planTitle")}</h3>
         <p className="muted">{run.plan.summary}</p>
         <ol className="plan-list">
           {run.plan.steps.map((s) => {
@@ -369,7 +373,7 @@ function ReplayBar({ events, cursor, onCursor }: { events: ClaudestraEvent[]; cu
           setPlaying(!playing);
         }}
       >
-        {playing ? "⏸" : "▶"} Replay
+        {playing ? "⏸" : "▶"} {t("replay.replay")}
       </button>
       <input type="range" min={1} max={events.length} value={pos} onChange={(e) => onCursor(Number(e.target.value) >= events.length ? null : Number(e.target.value))} />
       <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
@@ -384,7 +388,7 @@ function ReplayBar({ events, cursor, onCursor }: { events: ClaudestraEvent[]; cu
       </span>
       {cursor !== null && (
         <button className="ghost" onClick={() => (setPlaying(false), onCursor(null))}>
-          Live
+          {t("replay.live")}
         </button>
       )}
     </div>
@@ -394,11 +398,8 @@ function ReplayBar({ events, cursor, onCursor }: { events: ClaudestraEvent[]; cu
 function Empty() {
   return (
     <div className="empty">
-      <h1>Your AI company</h1>
-      <p className="muted">
-        Send a task below. The CEO decides who is needed (often nobody but itself), the plan appears as a graph, and each agent lights up while it works.
-        Switch to <strong>Stage</strong> to watch a little robot carry the work between desks, or pop it out to a second monitor.
-      </p>
+      <h1>{t("empty.title")}</h1>
+      <p className="muted">{t("empty.text")}</p>
     </div>
   );
 }
@@ -409,10 +410,10 @@ function Roster({ health }: { health: HealthResponse | null }) {
   return (
     <div className="inspector">
       <div className="inspector-body">
-        <h3 className="insp-title">Team</h3>
+        <h3 className="insp-title">{t("roster.title")}</h3>
         {health.agents.map((a) => (
           <div key={a.id} className="roster-item" style={{ borderColor: a.color }}>
-            <strong style={{ color: a.color }}>{a.name}</strong>{" "}
+            <strong style={{ color: a.color }}>{agentName(a.id, a.name)}</strong>{" "}
             <span className="muted small">
               · {a.modelClass} · {models[a.modelClass]}
             </span>

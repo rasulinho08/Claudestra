@@ -3,21 +3,12 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { StepNode as StepNodeType } from "./graph.ts";
 import { iconFor } from "./icons.ts";
 import { usd } from "./format.ts";
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: "pending",
-  ready: "ready",
-  running: "working",
-  succeeded: "done",
-  failed: "failed",
-  skipped: "skipped",
-  cancelled: "cancelled",
-};
+import { t, type Key } from "./i18n.ts";
 
 function StepNodeView({ data }: NodeProps<StepNodeType>) {
   const { step, agent, selected, direction } = data;
   const [inPos, outPos] = direction === "TB" ? [Position.Top, Position.Bottom] : [Position.Left, Position.Right];
-  const label = step.id === "final" ? `${agent.name} · final` : agent.name;
+  const label = step.id === "final" ? `${agent.name} · ${t("step.final")}` : agent.name;
   return (
     <div
       className={`node node-${step.status} ${selected ? "node-selected" : ""}`}
@@ -28,7 +19,7 @@ function StepNodeView({ data }: NodeProps<StepNodeType>) {
       <div className="node-head">
         <span className="node-icon">{iconFor(agent.icon)}</span>
         <span className="node-name">{label}</span>
-        <span className={`node-status st-${step.status}`}>{STATUS_LABEL[step.status]}</span>
+        <span className={`node-status st-${step.status}`}>{t(`step.${step.status}` as Key)}</span>
       </div>
       <div className="node-task">{step.note && step.status === "skipped" ? step.note : step.task || "…"}</div>
       <div className="node-foot">

@@ -1,9 +1,10 @@
 import type { TimelineItem } from "./run-state.ts";
+import { t } from "./i18n.ts";
 
 export type Decide = (approvalId: string, decision: "approve" | "approve_run" | "reject") => void;
 
 export function Timeline({ items, onDecide }: { items: TimelineItem[]; onDecide?: Decide }) {
-  if (items.length === 0) return <p className="muted small">Nothing yet.</p>;
+  if (items.length === 0) return <p className="muted small">{t("tl.nothing")}</p>;
   return (
     <div className="timeline">
       {items.map((item) => (
@@ -20,7 +21,7 @@ function Item({ item, onDecide }: { item: TimelineItem; onDecide?: Decide }) {
     case "thinking":
       return (
         <details className="card thinking">
-          <summary>thinking</summary>
+          <summary>{t("tl.thinking")}</summary>
           <pre>{item.text}</pre>
         </details>
       );
@@ -43,7 +44,7 @@ function Item({ item, onDecide }: { item: TimelineItem; onDecide?: Decide }) {
     case "handoff":
       return (
         <details className="card handoff">
-          <summary>⇢ input from {item.from}</summary>
+          <summary>{t("tl.inputFrom", { id: item.from })}</summary>
           <pre>{item.summary}</pre>
         </details>
       );
@@ -51,14 +52,14 @@ function Item({ item, onDecide }: { item: TimelineItem; onDecide?: Decide }) {
       return (
         <div className={`card approval approval-${item.state}`}>
           <div>
-            <strong>{item.state === "pending" ? "⏸ Needs approval" : item.state === "approved" ? "✓ Approved" : "✗ Rejected"}</strong>
+            <strong>{item.state === "pending" ? t("tl.needsApproval") : item.state === "approved" ? t("tl.approved") : t("tl.rejected")}</strong>
             {item.tool && <span className="muted small"> · {item.tool}</span>}
-            {item.by && item.by !== "user" && <span className="muted small"> · {item.by === "auto" ? "auto-approved" : "allowed by run rule"}</span>}
-            {item.scope === "run" && <span className="muted small"> · for this run</span>}
+            {item.by && item.by !== "user" && <span className="muted small"> · {item.by === "auto" ? t("tl.autoApproved") : t("tl.ruleApproved")}</span>}
+            {item.scope === "run" && <span className="muted small"> · {t("tl.forRun")}</span>}
           </div>
           {item.input !== undefined && <pre>{preview(item.input, 400)}</pre>}
           {item.reason && <div className="small muted">{item.reason}</div>}
-          {item.note && <div className="small">Note: {item.note}</div>}
+          {item.note && <div className="small">{t("tl.note", { text: item.note })}</div>}
           {item.state === "pending" && onDecide && <ApprovalButtons onDecide={(d) => onDecide(item.id, d)} />}
         </div>
       );
@@ -73,7 +74,7 @@ function Item({ item, onDecide }: { item: TimelineItem; onDecide?: Decide }) {
     case "denied":
       return (
         <div className="denied small">
-          ⛔ {item.tool} denied: {item.reason}
+          {t("tl.denied", { tool: item.tool, reason: item.reason })}
         </div>
       );
     case "error":
@@ -85,15 +86,15 @@ export function ApprovalButtons({ onDecide, allowRun = true }: { onDecide: (d: "
   return (
     <div className="approval-actions">
       <button className="btn-ok" onClick={() => onDecide("approve")}>
-        Approve
+        {t("approval.approve")}
       </button>
       {allowRun && (
-        <button className="ghost" onClick={() => onDecide("approve_run")} title="Allow this tool for the rest of the run">
-          Approve for run
+        <button className="ghost" onClick={() => onDecide("approve_run")} title={t("approval.approveRunTitle")}>
+          {t("approval.approveRun")}
         </button>
       )}
       <button className="btn-bad" onClick={() => onDecide("reject")}>
-        Reject
+        {t("approval.reject")}
       </button>
     </div>
   );
@@ -114,7 +115,7 @@ function ToolInput({ tool, input }: { tool: string; input: unknown }) {
   if (tool === "Write" && typeof i.content === "string") {
     return (
       <div className="diff">
-        <div className="small muted">{shortPath(String(i.file_path ?? ""))} (new content)</div>
+        <div className="small muted">{shortPath(String(i.file_path ?? ""))} {t("tl.newContent")}</div>
         <pre className="diff-add">{i.content.length > 4000 ? `${i.content.slice(0, 4000)}\n…` : i.content}</pre>
       </div>
     );
