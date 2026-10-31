@@ -15,8 +15,10 @@ const sleep = (ms: number, signal: AbortSignal) =>
     signal.addEventListener("abort", () => (clearTimeout(t), resolve()), { once: true });
   });
 
-const has = (text: string, re: RegExp) => re.test(text.toLowerCase());
-const BUILD_VERBS = /\b(build|make|create|write|code|implement|fix|program|develop|generate)\b/;
+const has = (text: string, re: RegExp) => re.test(text.toLocaleLowerCase("az"));
+// Unicode-aware word boundaries: \b treats letters such as ə, ş, ç as non-word characters.
+const words = (list: string) => new RegExp(`(?<![\\p{L}\\p{N}_])(${list})(?![\\p{L}\\p{N}_])`, "u");
+const BUILD_VERBS = words("build|make|create|write|code|implement|fix|program|develop|generate|yarat|düzəlt|yaz|qur|hazırla|kodla");
 const SLUG_SKIP = new Set(["build", "make", "create", "write", "code", "implement", "please", "with", "that", "this", "some", "simple", "hello", "claude", "for", "and", "the"]);
 
 export function requestOf(prompt: string): string {
@@ -25,9 +27,9 @@ export function requestOf(prompt: string): string {
 
 // Keyword planner standing in for the CEO's judgement.
 export function demoPlan(request: string, cap: number) {
-  const r = request.toLowerCase();
+  const r = request.toLocaleLowerCase("az");
   const wantsCode = has(r, BUILD_VERBS);
-  const isQuestion = /\?\s*$/.test(request.trim()) || has(r, /^(what|who|when|where|why|how|which|nə|kim|niyə|necə)\b/);
+  const isQuestion = /\?\s*$/.test(request.trim()) || has(r, new RegExp(`^(what|who|when|where|why|how|which|nə|nədir|kim|niyə|necə|hansı)(?![\\p{L}\\p{N}_])`, "u"));
   if (isQuestion && !wantsCode && request.length < 160) {
     return { route: "direct", summary: "A short question: the CEO answers directly.", directAnswer: `(demo) This is a simulated answer to: "${request}". With a real AI connected, the CEO would answer here in one cheap call.`, steps: [] };
   }
@@ -38,17 +40,17 @@ export function demoPlan(request: string, cap: number) {
     return id;
   };
   let last: string[] = [];
-  if (has(r, /\b(research|find|compare|latest|search|sources?)\b/) || !wantsCode) last = [add("researcher", `Research the background for: ${request}`)];
-  if (has(r, /\b(requirements?|user stor|spec)\b/)) last = [add("business-analyst", "Write requirements.md with acceptance criteria.", last)];
-  if (has(r, /\b(design|architecture|plan)\b/)) last = [add("architect", "Write design.md with a file-level plan.", last)];
+  if (has(r, words("research|find|compare|latest|search|sources?|araşdır|tap|müqayisə|axtar")) || !wantsCode) last = [add("researcher", `Research the background for: ${request}`)];
+  if (has(r, words("requirements?|user stor|spec|tələb\\p{L}*"))) last = [add("business-analyst", "Write requirements.md with acceptance criteria.", last)];
+  if (has(r, words("design|architecture|plan|dizayn|arxitektura"))) last = [add("architect", "Write design.md with a file-level plan.", last)];
   if (wantsCode) {
     const code = add("coder", `Implement: ${request}`, last);
     last = [code];
-    if (has(r, /\btests?\b/)) last = [add("tester", "Write and run tests for the implementation.", last, code)];
+    if (has(r, words("tests?|test\\p{L}*|yoxla"))) last = [add("tester", "Write and run tests for the implementation.", last, code)];
     last = [add("reviewer", "Review the implementation and request changes if needed.", last, code)];
-    if (has(r, /\b(secur|safe|auth)/)) last = [add("security", "Check the code for security issues.", last, code)];
+    if (has(r, /(secur|safe|auth|təhlükəsiz)/u)) last = [add("security", "Check the code for security issues.", last, code)];
   }
-  if (has(r, /\b(docs?|readme|document)/) || !wantsCode) add("doc-writer", wantsCode ? "Write a README for the result." : "Write report.md from the research.", last);
+  if (has(r, /(docs?|readme|document|sənəd)/u) || !wantsCode) add("doc-writer", wantsCode ? "Write a README for the result." : "Write report.md from the research.", last);
   return { route: steps.length === 1 ? "single_agent" : "team", summary: `Demo plan with ${steps.length} step(s) chosen from keywords in the request.`, directAnswer: "", steps: steps.slice(0, cap) };
 }
 
@@ -58,7 +60,7 @@ const askedForChanges = new Set<string>();
 type Tool = { tool: string; input: Record<string, unknown>; output: string; run?: () => Promise<void> };
 
 function toolsFor(req: SessionRequest, request: string): Tool[] {
-  const slug = (request.toLowerCase().match(/[a-z]+/g) ?? []).filter((w) => w.length > 3 && !SLUG_SKIP.has(w)).slice(0, 2).join("-") || "result";
+  const slug = (request.toLocaleLowerCase("az").match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => w.length > 3 && !SLUG_SKIP.has(w)).slice(0, 2).join("-") || "result";
   const file = (rel: string, content: string): Tool => ({
     tool: "Write",
     input: { file_path: path.join(req.workspace, rel), content },

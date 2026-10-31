@@ -341,3 +341,9 @@ test("an invalid plan goes back to the CEO once with the error, then the run con
   assert.match(log[1]!.prompt, /rejected: step s1 uses unknown agent "ghost"/);
   assert.ok(store.events("r").some((e) => e.type === "step.message" && /asking the CEO to fix it/.test(e.data.text)));
 });
+
+test("answer language reaches every step and the final prompt", async () => {
+  const { log, start } = setup({ "ceo:plan": () => ({ structured: coderOnly }), "ceo:final": () => ({ text: "ok" }) });
+  await start("x", { language: "az" });
+  for (const r of log) assert.match(r.prompt, /in Azerbaijani/);
+});

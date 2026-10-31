@@ -32,3 +32,10 @@ test("demo run: full team run completes with a fix loop and real files, $0", asy
   const done = events.at(-1)!;
   assert.ok(done.type === "run.completed" && done.data.totalCostUsd === 0);
 });
+
+test("demo planner understands Azerbaijani requests", () => {
+  assert.equal(demoPlan("Bakı nədir?", 6).route, "direct");
+  const plan = demoPlan("mənə sadə kalkulyator düzəlt", 6);
+  assert.deepEqual(plan.steps.map((s) => s.agent), ["coder", "reviewer"]);
+  assert.ok(demoPlan("süni intellekt haqqında araşdır və sənəd yaz", 6).steps.some((s) => s.agent === "researcher"));
+});

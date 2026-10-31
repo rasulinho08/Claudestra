@@ -1,6 +1,6 @@
 // Starting runs, shared by the HTTP API, triggers and evals (docs/04).
 import { randomUUID } from "node:crypto";
-import type { ApprovalMode, Profile } from "@claudestra/protocol";
+import type { AnswerLanguage, ApprovalMode, Profile } from "@claudestra/protocol";
 import type { Config } from "./config.ts";
 import type { RunStore } from "./store.ts";
 import type { AgentRegistry } from "./agents.ts";
@@ -21,6 +21,7 @@ export type RunRequest = {
   approvalMode?: ApprovalMode;
   workflowId?: string;
   params?: Record<string, string>;
+  language?: AnswerLanguage;
   createdBy?: string;
   // Who started it: "user", "trigger:<id>", "eval:<id>".
   origin?: string;
@@ -81,9 +82,10 @@ export class RunLauncher {
         workflowId: req.workflowId,
         origin: req.origin ?? "user",
         createdBy: req.createdBy,
+        language: req.language ?? "auto",
       },
     });
-    this.runner.start(runId, { prompt, profile, approvalMode, plan }).catch((err: unknown) => {
+    this.runner.start(runId, { prompt, profile, approvalMode, plan, language: req.language ?? "auto" }).catch((err: unknown) => {
       if (this.store.status(runId) === "running") this.store.append(runId, { type: "run.failed", data: { error: err instanceof Error ? err.message : String(err) } });
     });
     return { runId };

@@ -40,7 +40,7 @@ Return your decision as JSON matching the schema.`;
 
 export type StepReport = { id: string; agentName: string; status: string; summary: string; report: string; reportPath?: string };
 
-export function buildFinalPrompt(request: string, plan: Plan, reports: StepReport[]): string {
+export function buildFinalPrompt(request: string, plan: Plan, reports: StepReport[], notes = ""): string {
   const body = reports
     .map((r) => `## ${r.id} · ${r.agentName} · ${r.status}\n${r.report.slice(0, 4000) || r.summary || "(no output)"}`)
     .join("\n\n");
@@ -56,6 +56,7 @@ Plan summary: ${plan.summary}
 Step reports:
 ${body}
 
+${notes ? `\n${notes}\n` : ""}
 Write the final answer for the client.`;
 }
 

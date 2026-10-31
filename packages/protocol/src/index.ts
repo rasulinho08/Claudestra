@@ -20,6 +20,10 @@ export const ApprovalMode = z.enum(["manual", "smart", "auto"]);
 export type ApprovalMode = z.infer<typeof ApprovalMode>;
 
 export const RunMode = z.enum(["dynamic", "workflow"]);
+
+// Language of the final answer and user-facing files; "auto" = the language of the request.
+export const AnswerLanguage = z.enum(["auto", "az", "en", "ru", "tr"]);
+export type AnswerLanguage = z.infer<typeof AnswerLanguage>;
 export type RunMode = z.infer<typeof RunMode>;
 
 const Usage = z.object({
@@ -105,6 +109,7 @@ export const EventData = z.discriminatedUnion("type", [
       workflowId: z.string().optional(),
       origin: z.string().default("user"),
       createdBy: z.string().optional(),
+      language: AnswerLanguage.default("auto"),
     }),
   }),
   z.object({ type: z.literal("run.paused"), data: z.object({ by: z.string() }) }),
@@ -187,6 +192,7 @@ export const CreateRunRequest = z.object({
   approvalMode: ApprovalMode.optional(),
   workflowId: z.string().optional(),
   params: z.record(z.string(), z.string()).default({}),
+  language: AnswerLanguage.optional(),
 });
 export type CreateRunRequest = z.infer<typeof CreateRunRequest>;
 

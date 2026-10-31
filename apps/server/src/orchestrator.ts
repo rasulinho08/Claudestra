@@ -8,6 +8,7 @@ import {
   CEO_FINAL_STEP,
   CEO_PLAN_STEP,
   CeoReview,
+  type AnswerLanguage,
   type ApprovalMode,
   type EventData,
   type Plan,
@@ -50,7 +51,17 @@ export type StartOptions = {
   approvalMode: ApprovalMode;
   // Saved workflow plan: skips CEO planning (docs/04 "Workflow").
   plan?: Plan;
+  language?: AnswerLanguage;
 };
+
+const LANGUAGE_NAMES: Record<Exclude<AnswerLanguage, "auto">, string> = { az: "Azerbaijani", en: "English", ru: "Russian", tr: "Turkish" };
+
+// One prompt line, not a translator step (keeps cost flat).
+export function languageRule(lang: AnswerLanguage = "auto"): string {
+  return lang === "auto"
+    ? "Language: write the final answer and any user-facing text in the same language as the client request."
+    : `Language: write the final answer and any user-facing text (reports, README, UI text) in ${LANGUAGE_NAMES[lang]}. Keep code, identifiers and file names in English.`;
+}
 
 type Pending = { resolve: (d: { decision: "approve" | "approve_run" | "reject"; note: string }) => void; kind: "tool" | "plan" };
 
@@ -74,6 +85,7 @@ type RunContext = {
   startedAt: number;
   // Owner notes from memory, added to every step prompt.
   notes: string;
+  language: AnswerLanguage;
 };
 
 type StepResult = StepReport & { decision?: "continue" | "finish" };
@@ -123,6 +135,7 @@ export class Orchestrator {
       exceeded: false,
       startedAt: Date.now(),
       notes: "",
+      language: opts.language ?? "auto",
     };
     this.runs.set(runId, ctx);
     try {
@@ -179,7 +192,7 @@ export class Orchestrator {
 
     // 0. Memory: owner notes for everyone, related earlier runs for the CEO.
     const memory = this.deps.memory;
-    ctx.notes = memory?.notesBlock() ?? "";
+    ctx.notes = [memory?.notesBlock() ?? "", languageRule(ctx.language)].filter(Boolean).join("\n\n");
     const recalled = memory && !suppliedPlan ? memory.recall(ctx.prompt) : [];
     if (ctx.notes || recalled.length > 0) {
       this.emitRun(ctx, { type: "memory.recalled", data: { notes: memory?.notes().length ?? 0, runs: recalled.map((r) => ({ runId: r.runId, prompt: r.prompt.slice(0, 200) })) } });
@@ -252,7 +265,7 @@ export class Orchestrator {
     if (!this.running(ctx)) return;
     const remaining = ctx.profile.budgetUsd - ctx.spentUsd;
     const finalBudget = Math.max(Math.min(ceo.limits.maxBudgetUsd, remaining), MIN_STEP_BUDGET_USD);
-    const final = await this.runStep(ctx, CEO_FINAL_STEP, ceo, "Write the final answer", buildFinalPrompt(ctx.prompt, plan, reports), { budgetUsd: finalBudget });
+    const final = await this.runStep(ctx, CEO_FINAL_STEP, ceo, "Write the final answer", buildFinalPrompt(ctx.prompt, plan, reports, ctx.notes), { budgetUsd: finalBudget });
     if (!this.running(ctx)) return;
     if (!final.ok) {
       const fallback = reports.map((r) => `## ${r.id} · ${r.agentName} (${r.status})\n${r.summary}`).join("\n\n");
