@@ -74,6 +74,24 @@ charged unless you buy credits or turn on auto-reload). WebSearch is billed extr
 claude.ai and the Console works only with **Continue with Google** or an emailed link (no passwords), so you need one of
 those to claim the credits or create a key.
 
+## Meta Muse (your Meta API credit) and other OpenAI-compatible models
+
+1. Meta's developer console → create an API key (credit on the account is used per token).
+2. `notepad .env`:
+   ```
+   AUTH_MODE=meta
+   META_API_KEY=paste-your-key-here
+   META_MODEL=muse-spark-1.3
+   ```
+   Use the exact model id your Meta console lists (e.g. `muse-spark-1.3`, or the cheaper `muse-spark-1.3-contributor`,
+   which lets Meta train on your prompts). Optionally copy Meta's prices into `META_PRICE_INPUT_PER_M` /
+   `META_PRICE_OUTPUT_PER_M` so the Costs page and budgets show real dollars.
+3. `Ctrl+C`, `npm run dev`. The badge shows `meta`; a step's Inspector shows `auth: meta`.
+
+Same engine, other providers: `AUTH_MODE=openai_compat` with `OPENAI_BASE_URL` + `OPENAI_MODEL` (+ `OPENAI_API_KEY`),
+for example OpenRouter (`https://openrouter.ai/api/v1`) or a free local model with Ollama (`http://localhost:11434/v1`,
+no key). Agents use Claudestra's own file/Bash/web tools; skills and MCP apps need Claude.
+
 ## Real AI for free: Google Gemini
 
 1. Open **aistudio.google.com** with your Google account → **Get API key** → **Create API key**, copy it.

@@ -45,10 +45,12 @@ if (existsSync(envPath)) {
 } else bad(".env missing", "run: copy .env.example .env");
 
 const mode = env.AUTH_MODE || "claude_cli_login";
-const modes = ["api_key", "claude_cli_login", "observer", "bedrock", "vertex", "demo", "gemini"];
+const modes = ["api_key", "claude_cli_login", "observer", "bedrock", "vertex", "demo", "gemini", "meta", "openai_compat"];
 if (modes.includes(mode)) ok(`AUTH_MODE=${mode}`);
 else bad(`AUTH_MODE=${mode} is not valid`, `use one of: ${modes.join(", ")}`);
 if (mode === "gemini" && !env.GEMINI_API_KEY) bad("AUTH_MODE=gemini but GEMINI_API_KEY is empty", "create a free key at aistudio.google.com and paste it into .env");
+if (mode === "meta" && !env.META_API_KEY) bad("AUTH_MODE=meta but META_API_KEY is empty", "create a key in Meta's developer console and paste it into .env");
+if (mode === "openai_compat" && (!env.OPENAI_BASE_URL || !env.OPENAI_MODEL)) bad("AUTH_MODE=openai_compat needs OPENAI_BASE_URL and OPENAI_MODEL", "see docs/14 for OpenRouter / Ollama examples");
 if (mode === "api_key" && !env.ANTHROPIC_API_KEY) bad("AUTH_MODE=api_key but ANTHROPIC_API_KEY is empty", "paste your key into .env or use AUTH_MODE=claude_cli_login");
 
 // Claude Code CLI (login mode)

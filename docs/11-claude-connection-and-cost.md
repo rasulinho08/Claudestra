@@ -42,6 +42,7 @@ the model is always one of the four ways below.
 | C | `observer` | Claude Code logged in; hooks send events to Claudestra | Watching your normal Claude Code sessions as a graph | No |
 | D | `bedrock` / `vertex` | Cloud credentials | Companies on AWS/GCP | Yes |
 | F | `gemini` | `GEMINI_API_KEY` (free tier at aistudio.google.com) | Real AI without a Claude account; Claudestra's own tools (Read/Write/Edit/Glob/Grep/Bash/WebFetch/WebSearch), no skills or MCP (`apps/server/src/gemini.ts`, `local-tools.ts`) | Yes (with login) |
+| G | `meta` / `openai_compat` | `META_API_KEY` (api.meta.ai) or `OPENAI_BASE_URL` + `OPENAI_MODEL` | Meta Muse, OpenRouter, DeepSeek, Groq, local Ollama/LM Studio via Chat Completions; Claudestra's own tools, no skills/MCP (`apps/server/src/openai-compat.ts`) | Yes (with login) |
 | E | `demo` | Nothing | Trying the UI: simulated agents, no AI calls, $0 (`apps/server/src/demo.ts`) | No |
 
 **A. API key**

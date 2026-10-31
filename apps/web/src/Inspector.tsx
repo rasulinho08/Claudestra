@@ -15,6 +15,8 @@ const AUTH_LABEL: Record<string, string> = {
   "/login managed key": "Console login key",
   apiKeyHelper: "API key helper",
   gemini: "Gemini key",
+  meta: "Meta key",
+  openai_compat: "OpenAI-compatible key",
   demo: "demo",
 };
 

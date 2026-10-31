@@ -64,11 +64,20 @@ export type Config = {
 export const DEFAULT_NEVER_AUTO = ["Bash:*git push*", "Bash:*rm -rf*", "Bash:*sudo *", "mcp__*__create_*", "mcp__*__delete_*", "mcp__*__update_*", "mcp__*__push_*", "mcp__*__merge_*"];
 
 export function loadConfig(): Config {
-  // Gemini mode has its own model ids (docs/11 §1.1 F); everything else uses Claude models.
-  const gemini = process.env.AUTH_MODE === "gemini";
-  const strong = (gemini ? process.env.GEMINI_MODEL_STRONG : process.env.MODEL_STRONG) || (gemini ? "gemini-3.8-flash" : "claude-sonnet-5-5");
-  const mid = (gemini ? process.env.GEMINI_MODEL_MID : process.env.MODEL_MID) || (gemini ? "gemini-3.8-flash" : "claude-haiku-5-5");
-  const cheap = (gemini ? process.env.GEMINI_MODEL_CHEAP : process.env.MODEL_CHEAP) || (gemini ? "gemini-3.5-flash-lite" : "claude-haiku-5-5");
+  // Non-Claude engines have their own model ids (docs/11 §1.1); everything else uses Claude models.
+  const mode = process.env.AUTH_MODE;
+  const gemini = mode === "gemini";
+  const e = process.env;
+  const pick = (cls: "STRONG" | "MID" | "CHEAP", claude: string, geminiDefault: string) => {
+    if (mode === "meta") return e[`META_MODEL_${cls}`] || e.META_MODEL || "muse-spark-1.3";
+    if (mode === "openai_compat") return e[`OPENAI_MODEL_${cls}`] || e.OPENAI_MODEL || "";
+    if (gemini) return e[`GEMINI_MODEL_${cls}`] || geminiDefault;
+    return e[`MODEL_${cls}`] || claude;
+  };
+  const strong = pick("STRONG", "claude-sonnet-5-5", "gemini-3.8-flash");
+  const mid = pick("MID", "claude-haiku-5-5", "gemini-3.8-flash");
+  const cheap = pick("CHEAP", "claude-haiku-5-5", "gemini-3.5-flash-lite");
+  const compat = mode === "meta" || mode === "openai_compat";
   const models = (m: Record<ModelClass, string>) => m;
   return {
     authMode: choice("AUTH_MODE", AuthMode, "claude_cli_login"),
@@ -87,7 +96,7 @@ export function loadConfig(): Config {
         budgetUsd: num("RUN_BUDGET_USD", 2),
       },
       max: {
-        models: models({ cheap, mid: (gemini ? undefined : process.env.MODEL_MAX_MID) || strong, strong: (gemini ? process.env.GEMINI_MODEL_MAX : process.env.MODEL_MAX_STRONG) || (gemini ? strong : "claude-opus-5-5") }),
+        models: models({ cheap, mid: (gemini || compat ? undefined : process.env.MODEL_MAX_MID) || strong, strong: (gemini ? process.env.GEMINI_MODEL_MAX : compat ? undefined : process.env.MODEL_MAX_STRONG) || (gemini || compat ? strong : "claude-opus-5-5") }),
         planSizeCap: num("MAX_PLAN_SIZE_CAP", 10),
         budgetUsd: num("MAX_BUDGET_USD", 8),
       },

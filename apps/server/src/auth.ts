@@ -1,5 +1,6 @@
 // Builds the environment the Agent SDK runs with for each AUTH_MODE (docs/11 §1.1).
 import type { AuthMode } from "@claudestra/protocol";
+import { compatEndpoint } from "./openai-compat.ts";
 
 export type SdkAuth =
   | { ok: true; env: Record<string, string | undefined>; warning?: string }
@@ -35,6 +36,16 @@ export function resolveSdkAuth(mode: AuthMode, env: NodeJS.ProcessEnv): SdkAuth 
         env: base,
         warning: "Using Google Gemini. Agents use Claudestra's own tools (files, Bash, web); skills and MCP apps are not available in this mode.",
       };
+    case "meta":
+    case "openai_compat": {
+      const ep = compatEndpoint({ ...env, AUTH_MODE: mode });
+      if ("error" in ep) return { ok: false, reason: ep.error };
+      return {
+        ok: true,
+        env: { ...base, AUTH_MODE: mode },
+        warning: `Using ${ep.name} (${ep.baseUrl}). Agents use Claudestra's own tools (files, Bash, web); skills and MCP apps are not available in this mode.`,
+      };
+    }
     case "demo":
       return { ok: true, env: base, warning: "Demo mode: agents are simulated, no AI is called and nothing is charged. Set AUTH_MODE in .env to use Claude." };
     case "observer":

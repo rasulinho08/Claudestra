@@ -2,7 +2,7 @@
 // Server and web both import from here; the UI derives all state from these events.
 import { z } from "zod";
 
-export const AuthMode = z.enum(["api_key", "claude_cli_login", "observer", "bedrock", "vertex", "demo", "gemini"]);
+export const AuthMode = z.enum(["api_key", "claude_cli_login", "observer", "bedrock", "vertex", "demo", "gemini", "meta", "openai_compat"]);
 export type AuthMode = z.infer<typeof AuthMode>;
 
 export const RunSource = z.enum(["claudestra", "observer"]);
