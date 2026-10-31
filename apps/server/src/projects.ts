@@ -16,19 +16,27 @@ export type Project = { id: string; name: string; folder: string | null; path: s
 export type ProjectRun = { runId: string; prompt: string; status: string; startedAt: string; appliedAt: string | null; undoneAt: string | null };
 export type Change = { path: string; kind: "added" | "modified" | "deleted"; conflict: boolean; binary: boolean; before?: string; after?: string; bytes: number };
 
-const BASELINE = ".claudestra/baseline.json";
 const MAX_FILES = 5000;
 const MAX_BYTES = 200 * 1024 * 1024;
 const DIFF_TEXT_LIMIT = 200 * 1024;
 
-// Files that belong to Claudestra or tools, never copied back into a project.
-const internal = (rel: string) => rel.startsWith(".claudestra/") || rel.startsWith(".claude/");
+// Windows and macOS compare file names without case.
+const CASE_INSENSITIVE = process.platform === "win32" || process.platform === "darwin";
 
-const hashFile = (file: string) => createHash("sha1").update(readFileSync(file)).digest("hex");
+// Paths a run may never write into a project (and that never count as changes): Claudestra's and tools' own folders.
+// Compared per segment, without case and without the trailing dots/spaces Windows ignores (".Git." is ".git").
+const PROTECTED = new Set([".git", ".claude", ".claudestra", "node_modules", ".venv", "__pycache__"]);
+export function protectedPath(rel: string): boolean {
+  return rel.split(/[\\/]/).some((seg) => PROTECTED.has(seg.toLowerCase().replace(/[. ]+$/, "")) || (process.platform === "win32" && /~\d/.test(seg)));
+}
+
+const sha1 = (data: Uint8Array) => createHash("sha1").update(data).digest("hex");
+const hashFile = (file: string) => sha1(readFileSync(file));
 
 // The path an apply/undo may write: inside the project folder after following links, and not itself a link.
 // A symlink or junction inside a real project folder must not let a run write elsewhere on the PC.
 export function safeTarget(root: string, rel: string): string | null {
+  if (protectedPath(rel)) return null;
   const target = path.resolve(root, rel);
   if (!isInside(root, target) || target === path.resolve(root)) return null;
   let realRoot: string;
@@ -69,7 +77,9 @@ export class Projects {
     store.database.exec(`CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, folder TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS project_runs (
-      run_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, applied_at TEXT, undone_at TEXT, applied TEXT);`);
+      run_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, applied_at TEXT, undone_at TEXT, applied TEXT, baseline TEXT);`);
+    const cols = (store.database.prepare("PRAGMA table_info(project_runs)").all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes("baseline")) store.database.exec("ALTER TABLE project_runs ADD COLUMN baseline TEXT");
   }
 
   private row = (r: { id: string; name: string; folder: string | null; created_at: string; updated_at: string }): Project => ({
@@ -133,26 +143,26 @@ export class Projects {
     return r ? this.get(r.project_id) : undefined;
   }
 
-  // Copies the project's files into a fresh run workspace and records the baseline. Returns a context note for agents.
+  // Copies the project's files into a fresh run workspace and records the baseline (in the database, never in the
+  // agent-writable workspace). Returns a context note for agents.
   prepareRun(projectId: string, runId: string, workspace: string): string {
     const p = this.get(projectId);
     if (!p) throw new ProjectError("project not found", 404);
     if (!existsSync(p.path)) throw new ProjectError(`the project folder ${p.path} does not exist any more`, 409);
-    const files = listFiles(p.path, MAX_FILES + 1).filter((f) => !internal(f.path));
+    const files = listFiles(p.path, MAX_FILES + 1).filter((f) => !protectedPath(f.path));
     if (files.length > MAX_FILES) throw new ProjectError(`the project has more than ${MAX_FILES} files (node_modules and .git are skipped); use a smaller folder`, 409);
     const total = files.reduce((n, f) => n + f.bytes, 0);
     if (total > MAX_BYTES) throw new ProjectError(`the project is larger than ${MAX_BYTES / 1024 / 1024} MB`, 409);
     const baseline: Record<string, string> = {};
     for (const f of files) {
-      const src = path.join(p.path, f.path);
+      // Hash exactly the bytes the workspace receives, so an edit during the copy shows up as a conflict later.
+      const data = readFileSync(path.join(p.path, f.path));
       const dst = path.join(workspace, f.path);
       mkdirSync(path.dirname(dst), { recursive: true });
-      copyFileSync(src, dst);
-      baseline[f.path] = hashFile(src);
+      writeFileSync(dst, data);
+      baseline[f.path] = sha1(data);
     }
-    mkdirSync(path.join(workspace, ".claudestra"), { recursive: true });
-    writeFileSync(path.join(workspace, BASELINE), JSON.stringify({ projectId, files: baseline }), "utf8");
-    this.store.database.prepare("INSERT OR REPLACE INTO project_runs (run_id, project_id) VALUES (?, ?)").run(runId, projectId);
+    this.store.database.prepare("INSERT OR REPLACE INTO project_runs (run_id, project_id, baseline) VALUES (?, ?, ?)").run(runId, projectId, JSON.stringify(baseline));
     this.touch(projectId);
 
     const previous = this.runs(projectId).filter((r) => r.runId !== runId).slice(0, 5);
@@ -170,25 +180,41 @@ export class Projects {
     this.store.database.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), projectId);
   }
 
-  private baselineOf(workspace: string): { projectId: string; files: Record<string, string> } {
+  // The run's project and baseline, both from the database.
+  private runState(runId: string): { project: Project; baseline: Map<string, string>; appliedAt: string | null; undoneAt: string | null } {
+    const row = this.store.database.prepare("SELECT project_id, baseline, applied_at, undone_at FROM project_runs WHERE run_id = ?").get(runId) as
+      | { project_id: string; baseline: string | null; applied_at: string | null; undone_at: string | null }
+      | undefined;
+    if (!row) throw new ProjectError("this run was not started in a project", 404);
+    const project = this.get(row.project_id);
+    if (!project) throw new ProjectError("the project was deleted", 404);
+    let raw: Record<string, string> = {};
     try {
-      return JSON.parse(readFileSync(path.join(workspace, BASELINE), "utf8"));
+      raw = JSON.parse(row.baseline ?? "{}");
     } catch {
-      throw new ProjectError("this run was not started in a project", 404);
+      // treat as empty
     }
+    const baseline = new Map(Object.entries(raw).filter(([rel, h]) => typeof h === "string" && !protectedPath(rel)));
+    return { project, baseline, appliedAt: row.applied_at, undoneAt: row.undone_at };
   }
 
-  // What the run changed compared with the files it started from; conflict = the project changed meanwhile.
+  // What the run changed compared with the files it started from. conflict = the project file is now neither what the
+  // run started from nor what the run produced (someone else changed it).
   changes(runId: string, withText = true): Change[] {
     const workspace = path.join(this.workspacesDir, runId);
-    const base = this.baselineOf(workspace);
-    const p = this.get(base.projectId);
-    if (!p) throw new ProjectError("the project was deleted", 404);
-    const now = new Map(listFiles(workspace, MAX_FILES + 1).filter((f) => !internal(f.path)).map((f) => [f.path, f]));
-    const out: Change[] = [];
+    const { project: p, baseline } = this.runState(runId);
+    const listed = listFiles(workspace, MAX_FILES + 1).filter((f) => !protectedPath(f.path));
+    // A cut-off listing would turn every unlisted file into a "deletion": refuse instead.
+    if (listed.length > MAX_FILES) throw new ProjectError(`the run's workspace has more than ${MAX_FILES} files; copy the results by hand`, 409);
+    const now = new Map(listed.map((f) => [f.path, f]));
     const currentHash = (rel: string) => {
       const file = path.join(p.path, rel);
-      return existsSync(file) && statSync(file).isFile() ? hashFile(file) : null;
+      try {
+        const st = lstatSync(file);
+        return st.isFile() ? hashFile(file) : null;
+      } catch {
+        return null;
+      }
     };
     const text = (file: string) => {
       if (!withText || !existsSync(file)) return { binary: false, value: undefined as string | undefined };
@@ -196,103 +222,149 @@ export class Projects {
       const binary = buf.subarray(0, 8000).includes(0);
       return { binary, value: binary ? undefined : buf.subarray(0, DIFF_TEXT_LIMIT).toString("utf8") };
     };
+    // On Windows/macOS file names are case-insensitive: "Readme.md" -> "README.md" is one file, not an add and a delete.
+    const fold = (rel: string) => (CASE_INSENSITIVE ? rel.toLowerCase() : rel);
+    const baseByFold = new Map([...baseline.keys()].map((rel) => [fold(rel), rel]));
+    const nowFolds = new Set([...now.keys()].map(fold));
+    const out: Change[] = [];
     for (const [rel, f] of now) {
-      const before = base.files[rel];
+      const baseRel = baseline.has(rel) ? rel : baseByFold.get(fold(rel));
+      const before = baseRel !== undefined ? baseline.get(baseRel) : undefined;
       const hash = hashFile(path.join(workspace, rel));
       if (before === hash) continue;
-      const kind = before ? "modified" : "added";
+      const kind = before !== undefined ? "modified" : "added";
       const after = text(path.join(workspace, rel));
-      const old = kind === "modified" ? text(path.join(p.path, rel)) : { binary: false, value: undefined };
-      out.push({ path: rel, kind, conflict: currentHash(rel) !== (before ?? null), binary: after.binary || old.binary, before: old.value, after: after.value, bytes: f.bytes });
+      const old = kind === "modified" ? text(path.join(p.path, baseRel!)) : { binary: false, value: undefined };
+      const cur = currentHash(baseRel ?? rel);
+      out.push({ path: rel, kind, conflict: cur !== (before ?? null) && cur !== hash, binary: after.binary || old.binary, before: old.value, after: after.value, bytes: f.bytes });
     }
-    for (const rel of Object.keys(base.files)) {
-      if (now.has(rel)) continue;
-      out.push({ path: rel, kind: "deleted", conflict: currentHash(rel) !== base.files[rel], binary: false, bytes: 0 });
+    for (const [rel, h] of baseline) {
+      if (now.has(rel) || nowFolds.has(fold(rel))) continue;
+      const cur = currentHash(rel);
+      out.push({ path: rel, kind: "deleted", conflict: cur !== null && cur !== h, binary: false, bytes: 0 });
     }
     return out.sort((a, b) => a.path.localeCompare(b.path));
   }
 
-  // Applies the chosen changes (all by default) to the project folder; conflicts need force. Snapshot first.
+  // Applies the chosen changes (all by default) to the project folder; conflicts need force. Every file that will be
+  // overwritten or deleted is backed up and the manifest written BEFORE the first change, so an apply that fails
+  // half-way can still be undone.
   apply(runId: string, opts: { paths?: string[]; force?: boolean } = {}): { applied: string[]; skipped: { path: string; reason: string }[] } {
     const workspace = path.join(this.workspacesDir, runId);
-    const base = this.baselineOf(workspace);
-    const p = this.get(base.projectId);
-    if (!p) throw new ProjectError("the project was deleted", 404);
-    const pr = this.store.database.prepare("SELECT applied_at, undone_at FROM project_runs WHERE run_id = ?").get(runId) as { applied_at: string | null; undone_at: string | null } | undefined;
-    if (pr?.applied_at && !pr.undone_at) throw new ProjectError("this run's changes were already applied; undo first to apply again", 409);
+    const { project: p, appliedAt, undoneAt } = this.runState(runId);
+    if (appliedAt && !undoneAt) throw new ProjectError("this run's changes were already applied; undo first to apply again", 409);
+    const snapDir = path.join(this.snapshotsDir, p.id, runId);
+    if (existsSync(path.join(snapDir, "manifest.json"))) throw new ProjectError("an earlier apply of this run was interrupted; press Undo first", 409);
     const wanted = opts.paths ? new Set(opts.paths) : null;
     const changes = this.changes(runId, false).filter((c) => !wanted || wanted.has(c.path));
-    const snapDir = path.join(this.snapshotsDir, p.id, runId);
-    rmSync(snapDir, { recursive: true, force: true });
-    mkdirSync(snapDir, { recursive: true });
-    const record: { path: string; existed: boolean }[] = [];
-    const applied: string[] = [];
+
     const skipped: { path: string; reason: string }[] = [];
+    const plan: { change: Change; target: string; backup: string | null }[] = [];
+    const seen = new Set<string>();
     for (const c of changes) {
       if (c.conflict && !opts.force) {
         skipped.push({ path: c.path, reason: "changed in the project since this run started" });
         continue;
       }
       const target = safeTarget(p.path, c.path);
-      if (!target) {
-        skipped.push({ path: c.path, reason: "outside the project folder (or a link / folder there)" });
+      const key = CASE_INSENSITIVE ? target?.toLowerCase() : target;
+      if (!target || seen.has(key!)) {
+        skipped.push({ path: c.path, reason: "outside the project folder, a protected or linked path, or the same file twice" });
         continue;
       }
-      const existed = existsSync(target);
-      if (existed) {
-        const backup = path.join(snapDir, "files", c.path);
-        mkdirSync(path.dirname(backup), { recursive: true });
-        copyFileSync(target, backup);
-      }
-      record.push({ path: c.path, existed });
-      if (c.kind === "deleted") {
-        if (existed) rmSync(target, { force: true });
-      } else {
-        mkdirSync(path.dirname(target), { recursive: true });
-        copyFileSync(path.join(workspace, c.path), target);
-      }
-      applied.push(c.path);
+      seen.add(key!);
+      plan.push({ change: c, target, backup: existsSync(target) ? `files/${plan.length}` : null });
     }
-    writeFileSync(path.join(snapDir, "manifest.json"), JSON.stringify({ runId, at: new Date().toISOString(), files: record }), "utf8");
-    this.store.database
-      .prepare("UPDATE project_runs SET applied_at = ?, undone_at = NULL, applied = ? WHERE run_id = ?")
-      .run(new Date().toISOString(), JSON.stringify(applied), runId);
-    this.touch(p.id);
+
+    rmSync(snapDir, { recursive: true, force: true });
+    mkdirSync(path.join(snapDir, "files"), { recursive: true });
+    for (const item of plan) if (item.backup) copyFileSync(item.target, path.join(snapDir, item.backup));
+    const manifest = {
+      runId,
+      at: new Date().toISOString(),
+      complete: false,
+      files: plan.map((x) => ({ path: x.change.path, backup: x.backup, after: null as string | null, done: false })),
+    };
+    const writeManifest = () => writeFileSync(path.join(snapDir, "manifest.json"), JSON.stringify(manifest), "utf8");
+    writeManifest();
+
+    const applied: string[] = [];
+    try {
+      plan.forEach((item, i) => {
+        try {
+          if (item.change.kind === "deleted") rmSync(item.target, { force: true });
+          else {
+            const data = readFileSync(path.join(workspace, item.change.path));
+            mkdirSync(path.dirname(item.target), { recursive: true });
+            writeFileSync(item.target, data);
+            manifest.files[i]!.after = sha1(data);
+          }
+          manifest.files[i]!.done = true;
+          applied.push(item.change.path);
+        } catch (err) {
+          skipped.push({ path: item.change.path, reason: err instanceof Error ? err.message : String(err) });
+        }
+      });
+    } finally {
+      manifest.complete = true;
+      writeManifest();
+      this.store.database.prepare("UPDATE project_runs SET applied_at = ?, undone_at = NULL, applied = ? WHERE run_id = ?").run(new Date().toISOString(), JSON.stringify(applied), runId);
+      this.touch(p.id);
+    }
     return { applied, skipped };
   }
 
-  // Puts back what an apply overwrote and removes the files it created.
-  undo(runId: string): { restored: number } {
-    const projectId = (this.store.database.prepare("SELECT project_id FROM project_runs WHERE run_id = ?").get(runId) as { project_id: string } | undefined)?.project_id;
-    const p = projectId ? this.get(projectId) : undefined;
-    if (!p) throw new ProjectError("project not found", 404);
+  // Puts back what an apply overwrote and removes the files it created. A file changed again after the apply is left
+  // alone (reported as skipped) unless forced; the snapshot is kept until everything was restored.
+  undo(runId: string, force = false): { restored: number; skipped: string[] } {
+    const { project: p } = this.runState(runId);
     const snapDir = path.join(this.snapshotsDir, p.id, runId);
-    let manifest: { files: { path: string; existed: boolean }[] };
+    let manifest: { files: { path: string; backup: string | null; after: string | null; done: boolean }[] };
     try {
       manifest = JSON.parse(readFileSync(path.join(snapDir, "manifest.json"), "utf8"));
     } catch {
       throw new ProjectError("nothing to undo for this run", 404);
     }
     let restored = 0;
+    const skipped: string[] = [];
     for (const f of manifest.files) {
+      if (!f.done) continue; // this file was never changed (the apply failed before it)
       const target = safeTarget(p.path, f.path);
-      if (!target) continue;
-      if (f.existed) {
+      if (!target) {
+        skipped.push(f.path);
+        continue;
+      }
+      if (!force) {
+        // What is there now must still be what the apply wrote (or still be gone for a deletion).
+        let cur: string | null = null;
+        try {
+          cur = lstatSync(target).isFile() ? hashFile(target) : "not-a-file";
+        } catch {
+          cur = null;
+        }
+        if (cur !== f.after) {
+          skipped.push(f.path);
+          continue;
+        }
+      }
+      if (f.backup) {
         mkdirSync(path.dirname(target), { recursive: true });
-        copyFileSync(path.join(snapDir, "files", f.path), target);
+        copyFileSync(path.join(snapDir, f.backup), target);
       } else rmSync(target, { force: true });
       restored++;
     }
-    rmSync(snapDir, { recursive: true, force: true });
-    this.store.database.prepare("UPDATE project_runs SET undone_at = ? WHERE run_id = ?").run(new Date().toISOString(), runId);
+    if (skipped.length === 0) {
+      rmSync(snapDir, { recursive: true, force: true });
+      this.store.database.prepare("UPDATE project_runs SET undone_at = ? WHERE run_id = ?").run(new Date().toISOString(), runId);
+    }
     this.touch(p.id);
-    return { restored };
+    return { restored, skipped };
   }
 
   files(projectId: string) {
     const p = this.get(projectId);
     if (!p) throw new ProjectError("project not found", 404);
-    return existsSync(p.path) ? listFiles(p.path).filter((f) => !internal(f.path)) : [];
+    return existsSync(p.path) ? listFiles(p.path).filter((f) => !protectedPath(f.path)) : [];
   }
 }
 

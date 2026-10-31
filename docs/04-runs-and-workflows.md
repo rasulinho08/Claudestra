@@ -101,14 +101,17 @@ real folder on this PC linked by its full path (only when the server runs locall
 system folders and Claudestra's own folders are refused).
 
 1. **Start**: `POST /api/runs {projectId}` copies the project's files into the run workspace (skipping `.git`,
-   `node_modules`, `.claude`, `.venv`, `__pycache__`; ≤5000 files, ≤200 MB) and stores a baseline of hashes in
-   `.claudestra/baseline.json`. Agents only ever work on that copy. Every prompt gets a project note: the project
+   `node_modules`, `.claude`, `.venv`, `__pycache__`, in any letter case; ≤5000 files, ≤200 MB) and stores a baseline of
+   hashes in the database (`project_runs.baseline`), never in the agent-writable workspace. Agents only ever work on that copy. Every prompt gets a project note: the project
    name, its files and the last tasks in it (with "(applied)" marks), so the CEO plans to change files in place.
 2. **Review**: `GET /api/runs/:id/changes` lists added / modified / deleted files against the baseline with text
    for a line diff; `conflict` marks files that changed in the project folder after the run started.
 3. **Apply**: `POST /api/runs/:id/apply {paths?, force?}` (owner) copies the chosen changes back. Conflicts are
-   skipped unless forced. Before writing, every file it overwrites or deletes is copied to
-   `data/snapshots/<projectId>/<runId>/` with a manifest; `POST /api/runs/:id/undo-apply` restores it.
+   skipped unless forced; protected paths (`.git`, `.claude`, `.claudestra`, `node_modules`… in any case), links,
+   folders and anything outside the project are never written. Before the first write, every file it will overwrite
+   or delete is copied to `data/snapshots/<projectId>/<runId>/` and the manifest is written, so an apply that fails
+   half-way can still be undone. `POST /api/runs/:id/undo-apply {force?}` restores it; files changed again after the
+   apply are left alone unless forced. A workspace with more than 5000 files is refused rather than compared.
    Both append a `project.applied` event to the run (it may follow `run.completed`).
 
 UI: **Projects** page (create/link, files, task history with applied/undone marks, "New task in this project"),

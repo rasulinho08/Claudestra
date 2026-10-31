@@ -20,7 +20,7 @@ export function listFiles(root: string, maxFiles = MAX_FILES): FileEntry[] {
       return;
     }
     for (const e of entries) {
-      if (SKIP.has(e.name)) continue;
+      if (SKIP.has(e.name.toLowerCase().replace(/[. ]+$/, ""))) continue;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) walk(full);
       else if (e.isFile()) {

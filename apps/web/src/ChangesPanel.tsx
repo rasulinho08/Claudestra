@@ -93,8 +93,12 @@ function ChangesModal({ runId, run, onClose }: { runId: string; run: RunView; on
     setBusy(true);
     setError(null);
     try {
-      const r = await api<{ restored: number }>(`/api/runs/${runId}/undo-apply`, { body: {} });
-      setResult(t("changes.undoneMsg", { n: r.restored }));
+      let r = await api<{ restored: number; skipped: string[] }>(`/api/runs/${runId}/undo-apply`, { body: {} });
+      if (r.skipped.length && window.confirm(t("changes.undoConflicts", { n: r.skipped.length, files: r.skipped.slice(0, 8).join("\n") }))) {
+        const forced = await api<{ restored: number; skipped: string[] }>(`/api/runs/${runId}/undo-apply`, { body: { force: true } });
+        r = { restored: r.restored + forced.restored, skipped: forced.skipped };
+      }
+      setResult(t("changes.undoneMsg", { n: r.restored }) + (r.skipped.length ? ` ${t("changes.skipped", { n: r.skipped.length })}` : ""));
       load();
     } catch (err) {
       setError(errorText(err));

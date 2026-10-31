@@ -446,21 +446,22 @@ export function createApp(s: Services) {
     if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
     try {
       const r = projects.apply(id, parsed.data);
-      const p = projects.projectOf(id)!;
-      store.append(id, { type: "project.applied", data: { projectId: p.id, applied: r.applied.length, skipped: r.skipped.length, undone: false } });
+      const p = projects.projectOf(id);
+      if (p) store.append(id, { type: "project.applied", data: { projectId: p.id, applied: r.applied.length, skipped: r.skipped.length, undone: false } });
       return c.json(r);
     } catch (err) {
       return projectFail(c, err);
     }
   });
 
-  app.post("/api/runs/:id/undo-apply", (c) => {
+  app.post("/api/runs/:id/undo-apply", async (c) => {
     const id = c.req.param("id");
     if (!store.has(id)) return c.json({ error: "run not found" }, 404);
+    const force = Boolean(((await body(c)) as { force?: unknown } | null)?.force === true);
     try {
-      const r = projects.undo(id);
-      const p = projects.projectOf(id)!;
-      store.append(id, { type: "project.applied", data: { projectId: p.id, applied: r.restored, skipped: 0, undone: true } });
+      const r = projects.undo(id, force);
+      const p = projects.projectOf(id);
+      if (p && r.skipped.length === 0) store.append(id, { type: "project.applied", data: { projectId: p.id, applied: r.restored, skipped: 0, undone: true } });
       return c.json(r);
     } catch (err) {
       return projectFail(c, err);

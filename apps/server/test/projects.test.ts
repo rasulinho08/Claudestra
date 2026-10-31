@@ -171,3 +171,62 @@ test("safeTarget: no writes through links or onto folders in a real project", as
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("review fixes: baseline lives in the DB, protected paths, no false deletions, undo keeps later edits", async () => {
+  const { root, config, app, json, post } = setup();
+  try {
+    const real = path.join(root, "site");
+    mkdirSync(real);
+    writeFileSync(path.join(real, "a.txt"), "A1");
+    writeFileSync(path.join(real, "b.txt"), "B1");
+    const project = await json<{ id: string }>(post("/api/projects", { name: "P", folder: real }));
+    const other = await json<{ id: string; path: string }>(post("/api/projects", { name: "Other" }));
+    const { runId } = await json<{ runId: string }>(post("/api/runs", { prompt: "x", projectId: project.id }));
+    const ws = path.join(config.workspacesDir, runId);
+
+    // An agent forging a baseline file in the workspace changes nothing: the project comes from the DB.
+    mkdirSync(path.join(ws, ".claudestra"), { recursive: true });
+    writeFileSync(path.join(ws, ".claudestra", "baseline.json"), JSON.stringify({ projectId: other.id, files: {} }));
+    // Protected folders in any case are never changes.
+    mkdirSync(path.join(ws, ".Git"), { recursive: true });
+    writeFileSync(path.join(ws, ".Git", "config"), "evil");
+    writeFileSync(path.join(ws, "a.txt"), "A2");
+
+    const ch = await json<{ changes: { path: string; kind: string }[] }>(app.request(`/api/runs/${runId}/changes`));
+    assert.deepEqual(ch.changes.map((c) => `${c.kind}:${c.path}`), ["modified:a.txt"]);
+
+    const r = await json<{ applied: string[] }>(post(`/api/runs/${runId}/apply`, {}));
+    assert.deepEqual(r.applied, ["a.txt"]);
+    assert.equal(existsSync(path.join(other.path, "a.txt")), false, "nothing written into another project");
+    assert.equal(existsSync(path.join(real, ".Git")), false);
+    // After applying, the applied file is not a "conflict".
+    const after = await json<{ changes: { path: string; conflict: boolean }[] }>(app.request(`/api/runs/${runId}/changes`));
+    assert.equal(after.changes.find((c) => c.path === "a.txt")!.conflict, false);
+
+    // The owner edits a.txt again: undo leaves it alone unless forced.
+    writeFileSync(path.join(real, "a.txt"), "A3 owner");
+    const u1 = await json<{ restored: number; skipped: string[] }>(post(`/api/runs/${runId}/undo-apply`, {}));
+    assert.deepEqual(u1.skipped, ["a.txt"]);
+    assert.equal(readFileSync(path.join(real, "a.txt"), "utf8"), "A3 owner");
+    const u2 = await json<{ restored: number; skipped: string[] }>(post(`/api/runs/${runId}/undo-apply`, { force: true }));
+    assert.equal(u2.restored, 1);
+    assert.equal(readFileSync(path.join(real, "a.txt"), "utf8"), "A1");
+
+    // Too many files in the workspace: refuse instead of reporting everything else as deleted.
+    const { runId: big } = await json<{ runId: string }>(post("/api/runs", { prompt: "big", projectId: project.id }));
+    const bigWs = path.join(config.workspacesDir, big);
+    mkdirSync(path.join(bigWs, "aaa"));
+    for (let i = 0; i < 5001; i++) writeFileSync(path.join(bigWs, "aaa", `f${i}`), "");
+    assert.equal((await app.request(`/api/runs/${big}/changes`)).status, 409);
+    assert.equal((await post(`/api/runs/${big}/apply`, {})).status, 409);
+    assert.equal(readFileSync(path.join(real, "b.txt"), "utf8"), "B1");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("protectedPath catches case and Windows trailing-dot variants", async () => {
+  const { protectedPath } = await import("../src/projects.ts");
+  for (const p of [".git/config", ".Git./hooks/x", "a/NODE_MODULES/b.js", ".Claude/settings.json", ".claudestra /x"]) assert.equal(protectedPath(p), true, p);
+  for (const p of ["src/app.js", "git.txt", "docs/.github/x.yml"]) assert.equal(protectedPath(p), false, p);
+});

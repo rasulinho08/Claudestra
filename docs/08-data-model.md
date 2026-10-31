@@ -38,7 +38,7 @@ instead of a table, and settings come from `.env`. The remaining tables arrive w
 ## Added with the upgrade waves
 ```sql
 projects(id PK, name, folder NULL /* linked real folder; NULL = projects/<id> */, created_at, updated_at)
-project_runs(run_id PK, project_id, applied_at NULL, undone_at NULL, applied JSON /* paths */)
+project_runs(run_id PK, project_id, baseline JSON /* path -> sha1 at start */, applied_at NULL, undone_at NULL, applied JSON)
 run_exports(run_id, repo, url, commit_sha, at)          -- "Push to GitHub" history
 users(id PK, name UNIQUE, role, token_hash UNIQUE, created_at, last_seen)
 ```
