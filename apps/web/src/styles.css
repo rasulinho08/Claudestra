@@ -367,3 +367,23 @@ input:not([type=range]):not([type=file]) { background: var(--bg); color: var(--t
 .changes-view pre { margin: 0; font-size: 12px; white-space: pre-wrap; }
 .diff-ctx { opacity: 0.7; }
 @media (max-width: 760px) { .changes-body { grid-template-columns: 1fr; } }
+
+/* ---- Agents: profile & training ---- */
+.agent-tabs { margin-bottom: 8px; }
+.agent-profile { display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+.agent-profile h4 { margin: 8px 0 0; font-size: 14px; }
+.profile-head { display: flex; gap: 12px; align-items: center; border-left: 4px solid; padding-left: 10px; }
+.profile-head h3 { margin: 0; }
+.profile-icon { font-size: 26px; }
+.field textarea, .train-add textarea, .feedback-text { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; resize: vertical; }
+.train-add { display: flex; gap: 8px; align-items: flex-start; }
+.train-add textarea { flex: 1; }
+.train-item { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.lesson-up { border-left: 3px solid var(--ok); }
+.lesson-down { border-left: 3px solid #ef4444; }
+.tag-train { border-color: var(--accent); color: var(--accent); }
+.feedback { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.feedback-text { width: 100%; box-sizing: border-box; }
+.ghost.active-up { border-color: var(--ok); color: var(--ok); }
+.ghost.active-down { border-color: #ef4444; color: #ef4444; }
+.hq-agent-role { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }

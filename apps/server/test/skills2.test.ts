@@ -108,3 +108,39 @@ test("importSkill downloads a folder, refuses duplicates, lists choices for coll
     rmSync(skillsDir, { recursive: true, force: true });
   }
 });
+
+test("personas and training API: set a name and style, add instructions and lessons, delete", async () => {
+  const { createApp } = await import("../src/app.ts");
+  const { RunStore } = await import("../src/store.ts");
+  const { IntegrationRegistry } = await import("../src/integrations.ts");
+  const { WorkflowStore } = await import("../src/workflows.ts");
+  const { testConfig } = await import("./helpers.ts");
+  const dir = mkdtempSync(path.join(os.tmpdir(), "cls-persona-"));
+  try {
+    cpSync(path.join(root, "agents"), dir, { recursive: true });
+    const config = testConfig({ agentsDir: dir });
+    const store = new RunStore();
+    const agents = AgentRegistry.fromDir(dir);
+    const app = createApp({ config, store, agents, runner: { start: async () => {}, cancel: () => false, pause: () => false, resume: () => false, decide: () => false }, skills: new SkillLibrary(config.skillsDir), integrations: new IntegrationRegistry(config.integrationsFile, {}), workflows: new WorkflowStore(store) });
+    const req = (url: string, method: string, body?: unknown) => app.request(url, { method, body: body ? JSON.stringify(body) : undefined, headers: { "content-type": "application/json" } });
+    const info = (await (await req("/api/agents/tester/persona", "PUT", { persona: "Elvin Məmmədov", style: "Breaks things on purpose." })).json()) as { persona: string };
+    assert.equal(info.persona, "Elvin Məmmədov");
+    assert.match(readFileSync(path.join(dir, "tester.md"), "utf8"), /^persona: "Elvin Məmmədov"\nstyle: "Breaks things on purpose\."$/m);
+    await req("/api/agents/tester/persona", "PUT", { persona: "Elvin", style: "" });
+    const src = readFileSync(path.join(dir, "tester.md"), "utf8");
+    assert.match(src, /^persona: "Elvin"$/m);
+    assert.doesNotMatch(src, /^style:/m);
+
+    const added = (await (await req("/api/agents/tester/training", "POST", { kind: "instruction", text: "Test empty input first." })).json()) as { id: string };
+    await req("/api/agents/tester/training", "POST", { kind: "lesson", rating: "up", text: "Good edge cases.", runId: "r1", stepId: "s2" });
+    const t = (await (await req("/api/agents/tester/training", "GET")).json()) as { items: { kind: string }[]; prompt: string };
+    assert.equal(t.items.length, 2);
+    assert.match(t.prompt, /Test empty input first\.[\s\S]*Keep doing: Good edge cases\./);
+    const list = (await (await req("/api/agents", "GET")).json()) as { id: string; trained: number; persona?: string }[];
+    assert.equal(list.find((a) => a.id === "tester")!.trained, 2);
+    assert.equal((await req(`/api/agents/tester/training/${added.id}`, "DELETE")).status, 200);
+    assert.equal((await req("/api/agents/nobody/training", "POST", { kind: "instruction", text: "x" })).status, 404);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

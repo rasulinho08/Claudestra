@@ -65,6 +65,16 @@ The Runner builds `mcpServers` for that step and sets `allowedTools` to `mcp__<s
 Starter catalog: GitHub, web search/fetch, filesystem (sandbox), Notion, Google Drive, Google Calendar, Figma,
 Postgres/SQLite. Add any MCP server by URL or command.
 
+### MCP on every engine (bridge)
+Claude sessions use the SDK's MCP support. For Gemini, Meta and OpenAI-compatible engines Claudestra connects to the
+agent's servers itself (`apps/server/src/mcp-bridge.ts`, `@modelcontextprotocol/sdk`: stdio, Streamable HTTP, SSE),
+lists the allowed tools as functions `mcp__<server>__<tool>` (schemas cleaned for Gemini/OpenAI), and calls them after
+the same approval check. Stdio servers get a clean environment (no server secrets) plus their own variables.
+
+Free app included in `integrations.example.json`: **apify** (hosted MCP at mcp.apify.com, `APIFY_TOKEN`, free monthly
+credits: Google Maps, website and social scrapers, a web browser for agents), used by the Researcher and Sales agents;
+running an Actor (`mcp__apify__call-actor`) asks for approval in smart mode. A missing key is reported once per run.
+
 ## Custom tools (in-process)
 Small TS functions exposed as in-process MCP tools (e.g. `emit_artifact`, `ask_user`, `report_progress`).
 Two are mandatory for every agent:

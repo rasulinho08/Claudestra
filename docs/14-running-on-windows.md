@@ -133,6 +133,17 @@ is done, click **Changes** in the top bar of the task, look at the diff, untick 
 **Apply**. **Undo** puts the previous files back. Files that you changed yourself in the meantime are marked
 *conflict* and are not overwritten unless you confirm.
 
+## The AI team: names, training and free tools
+
+- **Agents** page: every agent has **Profile & training**. Give it a name (Rasul Fateh, Nihad Turan, Nərmin,
+  Daryanur are set already), a working style, and instructions only this agent follows. After a task, open a step
+  and rate it 👍/👎 with a sentence: it becomes a lesson for that agent only.
+- **Free apps**: get a free Apify token (console.apify.com → Settings → API & Integrations), add
+  `APIFY_TOKEN=...` to `.env`, restart. Nərmin and Sales can then use Google Maps / website scrapers, also with Meta.
+- **Lead machine**: Workflows → Templates → *Lead machine (find customers)*. Fill in what you sell and the city;
+  Nərmin researches, Sales builds `sales/leads.csv` and first messages, the Marketer writes the sequence, Daryanur the
+  weekly process. Nothing is sent automatically.
+
 ## Where the results are
 
 Each task writes its files into `Claudestra\workspaces\<run id>\` (the id is in the address bar after `run=`).

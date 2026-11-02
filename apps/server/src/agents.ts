@@ -17,6 +17,9 @@ const Frontmatter = z.object({
   // MCP tools this agent may use: "server" (all tools) or "server:toolGlob".
   integrations: z.array(z.string()).default([]),
   limits: z.object({ maxTurns: z.number().int().positive(), maxBudgetUsd: z.number().positive() }),
+  // A person's name for this agent (e.g. "Rasul Fateh") and how they work; both shape the prompt (training.ts).
+  persona: z.string().max(60).optional(),
+  style: z.string().max(600).optional(),
   color: z.string().default("#8a92a6"),
   icon: z.string().default("bot"),
 });
@@ -29,6 +32,7 @@ export type AgentDefinition = {
   integrations: string[];
   limits: { maxTurns: number; maxBudgetUsd: number };
   systemPrompt: string;
+  style?: string;
   source: string;
 };
 
@@ -41,7 +45,8 @@ export function parseAgent(source: string, file = "agent"): AgentDefinition {
   const systemPrompt = match[2]!.trim();
   if (!systemPrompt) throw new Error(`${file}: empty system prompt`);
   return {
-    info: { id: fm.id, name: fm.name, description: fm.description, color: fm.color, icon: fm.icon, modelClass: fm.modelClass },
+    info: { id: fm.id, name: fm.name, description: fm.description, color: fm.color, icon: fm.icon, modelClass: fm.modelClass, ...(fm.persona ? { persona: fm.persona } : {}) },
+    style: fm.style,
     tools: fm.tools,
     requiresApproval: fm.requiresApproval,
     skills: fm.skills,
@@ -102,6 +107,24 @@ export class AgentRegistry {
     const existing = /^skills:[^\n]*(?:\r?\n[ \t]+-[^\n]*)*/m;
     const next = existing.test(fm) ? fm.replace(existing, line) : /^limits:/m.test(fm) ? fm.replace(/^limits:/m, `${line}\nlimits:`) : `${fm}\n${line}`;
     return this.save(id, `---\n${next}\n---${match[2]}`);
+  }
+
+  // Sets or clears persona/style lines in the frontmatter (text edit, keeps the rest of the file).
+  setPersona(id: string, persona: string, style: string): AgentDefinition {
+    const def = this.agents.get(id);
+    if (!def) throw new Error(`unknown agent ${id}`);
+    const match = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n?[\s\S]*)$/.exec(def.source);
+    if (!match) throw new Error(`${id}.md: missing YAML frontmatter`);
+    const q = (v: string) => JSON.stringify(v.replace(/[\r\n]+/g, " ").trim());
+    let fm = match[1]!;
+    // Style first, then persona: both insert right after "name:", so the file reads name, persona, style.
+    for (const [key, value, max] of [["style", style, 600], ["persona", persona, 60]] as const) {
+      const re = new RegExp(`^${key}:.*$`, "m");
+      const v = value.trim().slice(0, max);
+      if (!v) fm = fm.replace(new RegExp(`^${key}:.*\\r?\\n?`, "m"), "");
+      else fm = re.test(fm) ? fm.replace(re, `${key}: ${q(v)}`) : fm.replace(/^(name:.*)$/m, `$1\n${key}: ${q(v)}`);
+    }
+    return this.save(id, `---\n${fm}\n---${match[2]}`);
   }
 
   get(id: string): AgentDefinition | undefined {

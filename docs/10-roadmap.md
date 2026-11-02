@@ -76,6 +76,8 @@ memory with embeddings, Slack/Telegram notifications for approvals.
   lmstudio; local models run one step at a time).
 - Wave 2: Projects (`projects.ts`: copy in, baseline, changes, apply with snapshot, undo; docs/04 "Projects") and the
   HQ home page (`GET /api/hq`, `HqPage.tsx`; docs/07 "HQ").
+- AI team: personas and per-agent training (`training.ts`, docs/03), COO and Sales agents, MCP bridge for non-Claude
+  engines (`mcp-bridge.ts`, docs/05) with Apify, and the *Lead machine* workflow template.
 
 ## Open questions
 1. **Primary use case** to optimise first: software building, research reports, or business analysis? (Default assumption: software building.)

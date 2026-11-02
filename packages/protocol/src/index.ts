@@ -44,6 +44,8 @@ export const AgentInfo = z.object({
   color: z.string(),
   icon: z.string(),
   modelClass: ModelClass,
+  // A person's name for the agent (e.g. "Rasul Fateh"); the UI shows it with the role.
+  persona: z.string().optional(),
 });
 export type AgentInfo = z.infer<typeof AgentInfo>;
 

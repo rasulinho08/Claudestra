@@ -17,7 +17,7 @@ type Hq = {
   upcoming: { id: string; name: string; workflow: string; nextRunAt: string }[];
   spend: { today: number; month: number; dailyCap: number | null; monthlyCap: number | null };
   projects: { id: string; name: string; runs: number; lastRunAt: string | null; folder: string | null }[];
-  team: { id: string; name: string; color: string; icon: string; description: string; modelClass: string; skills: number; busy: { runId: string; task: string } | null }[];
+  team: { id: string; name: string; persona?: string; color: string; icon: string; description: string; modelClass: string; skills: number; busy: { runId: string; task: string } | null }[];
 };
 
 // Own wording: some browsers ship only minimal Azerbaijani data for Intl.RelativeTimeFormat ("-9 s").
@@ -74,7 +74,7 @@ export function HqPage() {
   if (!hq) return <div className="hq-page">{error ? <div className="error">{error}</div> : <p className="muted">{t("files.loading")}</p>}</div>;
   const nameOf = (id: string | null) => {
     const a = hq.team.find((x) => x.id === id);
-    return a ? agentName(a.id, a.name) : (id ?? "");
+    return a ? a.persona || agentName(a.id, a.name) : (id ?? "");
   };
   const colorOf = (id: string | null) => hq.team.find((x) => x.id === id)?.color ?? "var(--muted)";
   const working = hq.team.filter((a) => a.busy).length;
@@ -166,7 +166,8 @@ export function HqPage() {
               .map((a) => (
                 <div key={a.id} className={`hq-agent ${a.busy ? "busy" : ""}`} style={{ "--agent": a.color } as React.CSSProperties} title={a.busy ? a.busy.task : a.description}>
                   <span className="hq-agent-icon">{iconFor(a.icon)}</span>
-                  <span className="hq-agent-name">{agentName(a.id, a.name)}</span>
+                  <span className="hq-agent-name">{a.persona || agentName(a.id, a.name)}</span>
+                  {a.persona && <span className="small muted hq-agent-role">{agentName(a.id, a.name)}</span>}
                   <span className="small muted">{a.busy ? t("hq.busy") : t("hq.free")}</span>
                 </div>
               ))}

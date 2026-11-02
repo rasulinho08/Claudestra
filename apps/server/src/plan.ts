@@ -19,7 +19,7 @@ export function verdictOf(report: string): "approve" | "changes" | "unknown" {
 
 export function buildPlanningPrompt(request: string, roster: AgentDefinition[], planSizeCap: number, budgetUsd: number, context = ""): string {
   const agents = roster
-    .map((a) => `- ${a.info.id} (${a.info.name}, cost: ${a.info.modelClass}): ${a.info.description}`)
+    .map((a) => `- ${a.info.id} (${a.info.name}${a.info.persona ? `, ${a.info.persona}` : ""}, cost: ${a.info.modelClass}): ${a.info.description}`)
     .join("\n");
   return `MODE: PLANNING
 

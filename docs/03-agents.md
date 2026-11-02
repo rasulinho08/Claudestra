@@ -23,6 +23,21 @@ Full per-agent specs (prompt drafts, tools, limits, gates, failure modes) are in
 
 "Model class" is mapped in config to concrete model IDs, so upgrades are one-line changes.
 
+## Names and training (implemented)
+Every agent can have a person's name and a working style in its frontmatter (`persona: "Rasul Fateh"`,
+`style: "Pragmatic builder…"`); the UI shows the name with the role, and the prompt starts with "Your name is …".
+Default team: Rasul Fateh (Coder), Nihad Turan (Project Manager), Nərmin (Researcher), Daryanur (COO).
+
+Each agent is trained separately (`apps/server/src/training.ts`, table `agent_training`):
+- **Instructions**: rules the owner writes for this agent only (Agents → Profile & training).
+- **Lessons**: after a step finishes, the Inspector asks "How did <name> do?"; 👍/👎 with a comment becomes a
+  lesson ("Keep doing: …" / "Avoid: …") for that agent.
+Both go into that agent's system prompt only (all instructions, the newest 15 lessons, ≤3000 characters), so agents
+learn different things. No model calls; the owner sees exactly what the agent sees ("What the agent sees").
+
+Business roles added for the "AI team" setup: **COO** (Daryanur: operating processes, weekly reviews, automations)
+and **Sales** (SDR: ICP, lead lists from public sources, first messages; never sends anything).
+
 ## Agent definition format
 
 One file per agent in `agents/`, e.g. `agents/coder.md`:

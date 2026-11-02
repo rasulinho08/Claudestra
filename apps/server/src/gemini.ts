@@ -9,6 +9,9 @@ import type { SessionOutcome } from "./sdk-mapper.ts";
 import { truncate } from "./sdk-mapper.ts";
 import { declarationsFor, runLocalTool, skillCatalog } from "./local-tools.ts";
 import { gateFor, maxWaitMs, retryDecision } from "./quota.ts";
+import { bridgeFor } from "./openai-compat.ts";
+import type { McpBridge } from "./mcp-bridge.ts";
+import type { SessionRequest } from "./session.ts";
 
 const API = process.env.GEMINI_API_BASE ?? "https://generativelanguage.googleapis.com/v1beta";
 
@@ -38,13 +41,22 @@ export function explainGeminiError(status: number, message: string): string {
 }
 
 export const geminiSession: SessionRunner = async (req) => {
+  const bridge = await bridgeFor(req);
+  try {
+    return await runGemini(req, bridge);
+  } finally {
+    await bridge?.close();
+  }
+};
+
+async function runGemini(req: SessionRequest, bridge: McpBridge | null): Promise<SessionOutcome> {
   const started = Date.now();
   const signal = req.controller.signal;
   const key = req.env.GEMINI_API_KEY ?? req.env.GOOGLE_API_KEY ?? "";
   const emit = (e: EventData) => !signal.aborted && req.emit(e);
   const isCeo = req.agent.info.id === "ceo";
   const skills = isCeo ? [] : (req.skills ?? []);
-  const tools = isCeo ? [] : declarationsFor(req.agent.tools, skills);
+  const tools = isCeo ? [] : [...declarationsFor(req.agent.tools, skills), ...(bridge?.declarations ?? [])];
   let system = isCeo ? req.agent.systemPrompt : req.agent.systemPrompt + HANDOFF_RULE + skillCatalog(req.workspace, skills);
   if (tools.length > 0) system += "\n\nWork only with relative paths inside the current workspace folder. Use the tools to do the work, then reply with your report.";
   let userText = req.prompt;
@@ -142,15 +154,17 @@ export const geminiSession: SessionRunner = async (req) => {
     for (const call of calls) {
       const callId = call.id ?? `g-${randomUUID()}`;
       const input = call.args ?? {};
-      emit({ type: "tool.called", data: { callId, tool: call.name, input } });
+      const viaMcp = bridge?.has(call.name) ?? false;
+      const toolName = viaMcp ? bridge!.toolName(call.name) : call.name;
+      emit({ type: "tool.called", data: { callId, tool: toolName, input } });
       if (call.name === "Skill" && typeof input.skill === "string") emit({ type: "skill.loaded", data: { name: input.skill } });
-      const decision = await req.authorize(call.name, input);
+      const decision = await req.authorize(toolName, input);
       let ok = false;
       let output = "";
       if (!decision.allow) output = decision.reason;
       else {
         try {
-          ({ ok, output } = await runLocalTool(call.name, input, req.workspace, signal));
+          ({ ok, output } = viaMcp ? await bridge!.call(call.name, input, signal) : await runLocalTool(call.name, input, req.workspace, signal));
         } catch (err) {
           output = err instanceof Error ? err.message : String(err);
         }
@@ -176,4 +190,4 @@ export const geminiSession: SessionRunner = async (req) => {
   }
   emit({ type: "step.succeeded", data: { summary: lastText.slice(0, 300), costUsd: cost(), durationMs: Date.now() - started } });
   return { ok: true, text: lastText, structured, costUsd: cost(), durationMs: Date.now() - started, numTurns: turns };
-};
+}

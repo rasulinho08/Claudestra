@@ -437,7 +437,8 @@ function Roster({ health }: { health: HealthResponse | null }) {
         <h3 className="insp-title">{t("roster.title")}</h3>
         {health.agents.map((a) => (
           <div key={a.id} className="roster-item" style={{ borderColor: a.color }}>
-            <strong style={{ color: a.color }}>{agentName(a.id, a.name)}</strong>{" "}
+            <strong style={{ color: a.color }}>{a.persona || agentName(a.id, a.name)}</strong>{" "}
+            {a.persona && <span className="small">· {agentName(a.id, a.name)} </span>}
             <span className="muted small">
               · {a.modelClass} · {models[a.modelClass]}
             </span>

@@ -9,6 +9,7 @@ import type { SessionOutcome } from "./sdk-mapper.ts";
 import { truncate } from "./sdk-mapper.ts";
 import { declarationsFor, runLocalTool, skillCatalog } from "./local-tools.ts";
 import { gateFor, maxWaitMs, retryAfterMs, retryDecision } from "./quota.ts";
+import { openMcpBridge, type McpBridge } from "./mcp-bridge.ts";
 
 export const META_BASE_URL = "https://api.meta.ai/v1";
 
@@ -66,7 +67,24 @@ export function explainCompatError(name: string, status: number, message: string
 
 const errorText = (body: Completion, status: number) => (typeof body.error === "string" ? body.error : body.error?.message) || `HTTP ${status}`;
 
+// Opens the agent's MCP servers (if any) for the length of the step, then runs it.
 export const compatSession: SessionRunner = async (req) => {
+  const bridge = await bridgeFor(req);
+  try {
+    return await runCompat(req, bridge);
+  } finally {
+    await bridge?.close();
+  }
+};
+
+export async function bridgeFor(req: Parameters<SessionRunner>[0]): Promise<McpBridge | null> {
+  if (req.agent.info.id === "ceo" || !req.mcpServers || Object.keys(req.mcpServers).length === 0) return null;
+  const bridge = await openMcpBridge(req.mcpServers, req.mcpAllows ?? (() => false));
+  if (bridge.errors.length) req.emit({ type: "step.message", data: { messageId: randomUUID(), role: "system", partial: false, text: `Apps not reachable: ${bridge.errors.join("; ")}` } });
+  return bridge;
+}
+
+async function runCompat(req: Parameters<SessionRunner>[0], bridge: McpBridge | null): Promise<SessionOutcome> {
   const started = Date.now();
   const signal = req.controller.signal;
   const endpoint = compatEndpoint(req.env);
@@ -80,6 +98,7 @@ export const compatSession: SessionRunner = async (req) => {
   const isCeo = req.agent.info.id === "ceo";
   const skills = isCeo ? [] : (req.skills ?? []);
   const decls = isCeo ? [] : declarationsFor(req.agent.tools, skills);
+  if (bridge) decls.push(...bridge.declarations);
   const tools = decls.map((d) => ({ type: "function" as const, function: { name: d.name, description: d.description, parameters: d.parameters } }));
   let system = isCeo ? req.agent.systemPrompt : req.agent.systemPrompt + HANDOFF_RULE + skillCatalog(req.workspace, skills);
   if (tools.length > 0) system += "\n\nWork only with relative paths inside the current workspace folder. Use the tools to do the work, then reply with your report.";
@@ -186,14 +205,16 @@ export const compatSession: SessionRunner = async (req) => {
       } catch {
         output = "The tool arguments were not valid JSON; send them again as a JSON object.";
       }
-      emit({ type: "tool.called", data: { callId, tool: call.function.name, input } });
+      const viaMcp = bridge?.has(call.function.name) ?? false;
+      const toolName = viaMcp ? bridge!.toolName(call.function.name) : call.function.name;
+      emit({ type: "tool.called", data: { callId, tool: toolName, input } });
       if (call.function.name === "Skill" && typeof input.skill === "string") emit({ type: "skill.loaded", data: { name: input.skill } });
       if (!output) {
-        const decision = await req.authorize(call.function.name, input);
+        const decision = await req.authorize(toolName, input);
         if (!decision.allow) output = decision.reason;
         else {
           try {
-            ({ ok, output } = await runLocalTool(call.function.name, input, req.workspace, signal));
+            ({ ok, output } = viaMcp ? await bridge!.call(call.function.name, input, signal) : await runLocalTool(call.function.name, input, req.workspace, signal));
           } catch (err) {
             output = err instanceof Error ? err.message : String(err);
           }
@@ -218,4 +239,4 @@ export const compatSession: SessionRunner = async (req) => {
   }
   emit({ type: "step.succeeded", data: { summary: lastText.slice(0, 300), costUsd: cost(), durationMs: Date.now() - started } });
   return { ok: true, text: lastText, structured, costUsd: cost(), durationMs: Date.now() - started, numTurns: turns };
-};
+}

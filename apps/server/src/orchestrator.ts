@@ -25,6 +25,7 @@ import { evaluate } from "./approvals.ts";
 import type { SkillLibrary } from "./skills.ts";
 import type { IntegrationRegistry } from "./integrations.ts";
 import type { Memory } from "./memory.ts";
+import { trainedPrompt, type Training } from "./training.ts";
 import type { SessionOutcome } from "./sdk-mapper.ts";
 import {
   buildFinalPrompt,
@@ -89,6 +90,7 @@ type RunContext = {
   notes: string;
   language: AnswerLanguage;
   projectNote: string;
+  reportedMissing: Set<string>;
 };
 
 type StepResult = StepReport & { decision?: "continue" | "finish" };
@@ -98,6 +100,7 @@ export type OrchestratorDeps = {
   skills?: SkillLibrary;
   integrations?: IntegrationRegistry;
   memory?: Memory;
+  training?: Training;
 };
 
 export class Orchestrator {
@@ -140,6 +143,7 @@ export class Orchestrator {
       notes: "",
       language: opts.language ?? "auto",
       projectNote: opts.projectNote ?? "",
+      reportedMissing: new Set(),
     };
     this.runs.set(runId, ctx);
     try {
@@ -468,12 +472,16 @@ export class Orchestrator {
     if (opts.announce !== false) this.emitStep(ctx, stepId, agent.info.id, { type: "step.ready", data: { task } });
     const skills = this.deps.skills && agent.skills.length > 0 ? this.deps.skills.materialize(agent.skills, ctx.workspace) : [];
     const mcp = this.deps.integrations && agent.integrations.length > 0 ? this.deps.integrations.forAgent(agent.integrations) : undefined;
-    if (mcp && mcp.unavailable.length > 0) {
-      this.emitStep(ctx, stepId, agent.info.id, { type: "step.message", data: { messageId: randomUUID(), role: "system", partial: false, text: `Integrations not available (missing config or secrets): ${mcp.unavailable.join(", ")}` } });
+    // Say once per run which apps are not set up (missing key), not on every step.
+    const newlyMissing = (mcp?.unavailable ?? []).filter((id) => !ctx.reportedMissing.has(id));
+    if (newlyMissing.length > 0) {
+      for (const id of newlyMissing) ctx.reportedMissing.add(id);
+      this.emitStep(ctx, stepId, agent.info.id, { type: "step.message", data: { messageId: randomUUID(), role: "system", partial: false, text: `Apps not set up yet (add their key in .env to use them): ${newlyMissing.join(", ")}` } });
     }
     try {
       const outcome = await this.runSession({
-        agent,
+        // Each agent's own identity and training go into its system prompt only.
+        agent: { ...agent, systemPrompt: trainedPrompt(agent, this.deps.training) },
         prompt,
         task,
         workspace: ctx.workspace,
@@ -486,6 +494,7 @@ export class Orchestrator {
         outputSchema: opts.outputSchema,
         skills,
         mcpServers: mcp?.servers,
+        mcpAllows: mcp?.allows,
         osSandbox: this.config.osSandbox,
         claudeCodePath: this.config.claudeCodePath,
       });

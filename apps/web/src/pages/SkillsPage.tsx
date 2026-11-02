@@ -3,7 +3,7 @@ import { ApiError, api, errorText } from "../api.ts";
 import { agentName, t } from "../i18n.ts";
 
 type Skill = { name: string; description: string; usedBy: string[] };
-type Agent = { id: string; name: string; color: string };
+type Agent = { id: string; name: string; persona?: string; color: string };
 
 const TEMPLATE = (name: string) => `---
 name: ${name}
@@ -141,7 +141,7 @@ export function SkillsPage() {
               ) : (
                 s.usedBy.map((a) => (
                   <span key={a} className="tag">
-                    {agentName(a, agents.find((x) => x.id === a)?.name ?? a)}
+                    {agents.find((x) => x.id === a)?.persona || agentName(a, agents.find((x) => x.id === a)?.name ?? a)}
                   </span>
                 ))
               )}
@@ -170,7 +170,7 @@ export function SkillsPage() {
                   {agents.map((a) => (
                     <label key={a.id} className="attach-item" style={{ borderColor: current.usedBy.includes(a.id) ? a.color : undefined }}>
                       <input type="checkbox" checked={current.usedBy.includes(a.id)} onChange={(e) => toggle(a.id, e.target.checked)} />
-                      {agentName(a.id, a.name)}
+                      {a.persona || agentName(a.id, a.name)}
                     </label>
                   ))}
                 </div>

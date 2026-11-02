@@ -10,7 +10,7 @@ import { FilesPanel } from "./FilesPanel.tsx";
 import { seconds, tokens, usd } from "./format.ts";
 import { api, errorText } from "./api.ts";
 import { go } from "./router.ts";
-import { t, type Key } from "./i18n.ts";
+import { agentName, t, type Key } from "./i18n.ts";
 
 // SDK apiKeySource values → readable labels ("none" means the claude.ai login, not "no auth").
 const AUTH_LABEL: Record<string, string> = {
@@ -124,7 +124,8 @@ function body(run: RunView, runId: string, health: HealthResponse | null, select
   return (
     <>
       <h3 className="insp-title" style={{ color: agent.color }}>
-        {iconFor(agent.icon)} {agent.name}{" "}
+        {iconFor(agent.icon)} {agent.name}
+        {agent.persona && <span className="muted small"> · {agentName(agent.id, run.agents[agent.id]?.name ?? agent.id)}</span>}{" "}
         <span className="muted small">
           · {step.id} · {t(`step.${step.status}` as Key)}
           {step.iteration ? ` · ${t("insp.round", { n: step.iteration })}` : ""}
@@ -150,6 +151,50 @@ function body(run: RunView, runId: string, health: HealthResponse | null, select
       )}
       {step.note && <div className="denied small">{step.note}</div>}
       <Timeline items={step.items} onDecide={onDecide} />
+      {(step.status === "succeeded" || step.status === "failed") && step.agentId !== "ceo" && <Feedback runId={runId} stepId={step.id} agentId={step.agentId} name={agent.name} />}
     </>
+  );
+}
+
+// Rate a finished step: the comment becomes a lesson in this agent's own training (docs/03 "Training").
+function Feedback({ runId, stepId, agentId, name }: { runId: string; stepId: string; agentId: string; name: string }) {
+  const [rating, setRating] = useState<"up" | "down" | null>(null);
+  const [text, setText] = useState("");
+  const [state, setState] = useState<{ text: string; error?: boolean } | null>(null);
+  async function save() {
+    if (!rating) return;
+    const lesson = text.trim() || (rating === "up" ? t("train.defaultUp") : t("train.defaultDown"));
+    try {
+      await api(`/api/agents/${agentId}/training`, { body: { kind: "lesson", rating, text: lesson, runId, stepId } });
+      setState({ text: t("train.saved", { name }) });
+      setText("");
+      setRating(null);
+    } catch (err) {
+      setState({ text: errorText(err), error: true });
+    }
+  }
+  return (
+    <div className="feedback card">
+      <div className="small muted">{t("train.rate", { name })}</div>
+      <div className="row-gap">
+        <button className={`ghost ${rating === "up" ? "active-up" : ""}`} onClick={() => setRating("up")}>
+          👍 {t("train.good")}
+        </button>
+        <button className={`ghost ${rating === "down" ? "active-down" : ""}`} onClick={() => setRating("down")}>
+          👎 {t("train.bad")}
+        </button>
+      </div>
+      {rating && (
+        <>
+          <textarea className="feedback-text" rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder={rating === "up" ? t("train.upPlaceholder") : t("train.downPlaceholder")} />
+          <div className="row-gap">
+            <button className="btn-ok" onClick={save}>
+              {t("train.teach", { name })}
+            </button>
+          </div>
+        </>
+      )}
+      {state && <div className={`small ${state.error ? "error" : "muted"}`}>{state.text}</div>}
+    </div>
   );
 }

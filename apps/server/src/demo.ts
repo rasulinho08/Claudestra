@@ -52,7 +52,9 @@ export function demoPlan(request: string, cap: number) {
     if (has(r, /(secur|safe|auth|təhlükəsiz)/u)) last = [add("security", "Check the code for security issues.", last, code)];
   }
   if (wantsCode && has(r, words("design|style|css|beautiful|pretty|dizayn|gözəl|stil\\p{L}*"))) last = [add("designer", "Polish the look: layout, colours, accessibility.", last)];
-  if (has(r, words("market\\p{L}*|landing|slogan|posts?|reklam\\p{L}*|satış"))) last = [add("marketer", "Write the marketing copy.", last)];
+  if (has(r, words("leads?|customers?|clients?|müştəri\\p{L}*|satış\\p{L}*"))) last = [add("sales", "Build a qualified lead list and first messages.", last)];
+  if (has(r, words("market\\p{L}*|landing|slogan|posts?|reklam\\p{L}*"))) last = [add("marketer", "Write the marketing copy.", last)];
+  if (has(r, words("process\\p{L}*|operations?|proses\\p{L}*|əməliyyat\\p{L}*"))) last = [add("coo", "Write the weekly operating process.", last)];
   if (has(r, words("translat\\p{L}*|tərcümə\\p{L}*|english|ingilis\\p{L}*|rus\\p{L}*"))) last = [add("translator", "Translate the texts.", last)];
   if (has(r, /(docs?|readme|document|sənəd)/u) || !wantsCode) add("doc-writer", wantsCode ? "Write a README for the result." : "Write report.md from the research.", last);
   return { route: steps.length === 1 ? "single_agent" : "team", summary: `Demo plan with ${steps.length} step(s) chosen from keywords in the request.`, directAnswer: "", steps: steps.slice(0, cap) };
@@ -98,6 +100,14 @@ function toolsFor(req: SessionRequest, request: string): Tool[] {
       return [{ tool: "Read", input: { file_path: path.join(req.workspace, `${slug}.js`) }, output: "(demo) file contents" }];
     case "doc-writer":
       return [file("README.md", `# ${request.slice(0, 60)} (demo)\n\nHow to use the result.\n`)];
+    case "sales":
+      return [
+        { tool: "WebSearch", input: { query: `companies ${request.slice(0, 60)}` }, output: "(demo) 12 companies found" },
+        file("sales/leads.csv", "company,website,city,size,contact_role,contact_name,email,source_url,fit_score,reason\n(demo) Example LLC,https://example.az,Bakı,20-50,Founder,,,https://example.az,4,(demo) fits the profile\n"),
+        file("sales/drafts.md", "# (demo) First messages\n\n## Example LLC\nSalam! …\n"),
+      ];
+    case "coo":
+      return [file("ops/process.md", "# (demo) Weekly process\n\n- Mon: research\n- Tue: leads\n- Wed: approve and send\n\n## Next actions\n1. …\n")];
     case "designer":
       return [file("style.css", ":root { --accent: #f59e0b; --bg: #fff; }\n/* (demo) styles */\nbody { font-family: system-ui, sans-serif; }\n")];
     case "translator":

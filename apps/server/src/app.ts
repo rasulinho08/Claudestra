@@ -22,6 +22,7 @@ import { GitHubError, exportToGitHub, repoSlug } from "./github-export.ts";
 import { SkillImportError, importSkill } from "./skill-import.ts";
 import type { PreviewTokens } from "./preview.ts";
 import { ProjectError, Projects } from "./projects.ts";
+import { Training } from "./training.ts";
 import { startOfDay, startOfMonth } from "./analytics.ts";
 import { HttpError, RunLauncher } from "./runs.ts";
 import { Memory } from "./memory.ts";
@@ -56,6 +57,7 @@ export type Services = {
   previewRunning?: () => boolean;
   previewTokens?: PreviewTokens;
   projects?: Projects;
+  training?: Training;
   // Opens a folder in the OS file manager; replaceable in tests.
   openFolder?: (dir: string) => void;
 };
@@ -126,6 +128,7 @@ export function createApp(s: Services) {
   const memory = s.memory ?? new Memory(store);
   const access = s.access ?? new Access(store, null);
   const triggers = s.triggers ?? new TriggerStore(store);
+  const training = s.training ?? new Training(store);
   const loopbackServer = ["127.0.0.1", "localhost", "::1"].includes(config.host);
   const projects = s.projects ?? new Projects(store, config.projectsDir, config.snapshotsDir, config.workspacesDir, loopbackServer);
   const launcher = s.launcher ?? new RunLauncher(config, store, agents, workflows, runner, projects);
@@ -514,7 +517,7 @@ export function createApp(s: Services) {
   // ---- agents, skills, integrations -------------------------------------------------------
 
   app.get("/api/agents", (c) =>
-    c.json(agents.all().map((a) => ({ ...a.info, tools: a.tools, skills: a.skills, integrations: a.integrations, requiresApproval: a.requiresApproval, limits: a.limits, source: a.source }))),
+    c.json(agents.all().map((a) => ({ ...a.info, style: a.style ?? "", trained: training.counts()[a.info.id] ?? 0, tools: a.tools, skills: a.skills, integrations: a.integrations, requiresApproval: a.requiresApproval, limits: a.limits, source: a.source }))),
   );
 
   app.put("/api/agents/:id", async (c) => {
@@ -526,6 +529,44 @@ export function createApp(s: Services) {
     } catch (err) {
       return fail(c, err);
     }
+  });
+
+  // ---- personas and per-agent training (docs/03 "Training") -------------------------------------
+
+  app.put("/api/agents/:id/persona", async (c) => {
+    const parsed = z.object({ persona: z.string().max(60).default(""), style: z.string().max(600).default("") }).safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    if (!agents.get(c.req.param("id"))) return c.json({ error: "agent not found" }, 404);
+    try {
+      return c.json(agents.setPersona(c.req.param("id"), parsed.data.persona, parsed.data.style).info);
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  app.get("/api/agents/:id/training", (c) => {
+    const a = agents.get(c.req.param("id"));
+    if (!a) return c.json({ error: "agent not found" }, 404);
+    return c.json({ items: training.list(a.info.id), prompt: training.block(a.info.id) });
+  });
+
+  app.post("/api/agents/:id/training", async (c) => {
+    const a = agents.get(c.req.param("id"));
+    if (!a) return c.json({ error: "agent not found" }, 404);
+    const parsed = z
+      .object({ kind: z.enum(["instruction", "lesson"]), text: z.string().min(1).max(1000), rating: z.enum(["up", "down"]).nullable().optional(), runId: z.string().max(128).optional(), stepId: z.string().max(64).optional() })
+      .safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    try {
+      return c.json(training.add(a.info.id, parsed.data), 201);
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  app.delete("/api/agents/:id/training/:itemId", (c) => {
+    const ok = training.remove(c.req.param("id"), c.req.param("itemId"));
+    return ok ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
   });
 
   app.get("/api/skills", (c) => c.json(skills.list(agents.all().map((a) => ({ id: a.info.id, skills: a.skills })))));

@@ -1,0 +1,44 @@
+{
+  "name": "Lead machine (find customers)",
+  "description": "Nərmin researches the market, Sales builds and qualifies a lead list with first messages, the Marketer turns them into a 3-step sequence, Daryanur (COO) writes the weekly process. Nothing is sent: you approve and send.",
+  "params": [
+    { "key": "prompt", "label": "What do you sell, and to whom?", "default": "" },
+    { "key": "region", "label": "Region or city", "default": "Bakı, Azərbaycan" },
+    { "key": "count", "label": "How many leads", "default": "20" },
+    { "key": "language", "label": "Language of the messages", "default": "Azerbaijani" }
+  ],
+  "steps": [
+    {
+      "id": "market",
+      "agent": "researcher",
+      "task": "Research the market for: {{prompt}} in {{region}}. Who buys it (company types, size, roles that decide), why they buy, and where such companies can be found publicly (directories, maps, associations, social networks). If the apify app is available, use it for Google Maps or website data. Write research/market.md with sources and a short ideal customer profile.",
+      "dependsOn": [],
+      "successCriteria": "research/market.md with an ICP and at least 5 sources",
+      "loopBackTo": ""
+    },
+    {
+      "id": "leads",
+      "agent": "sales",
+      "task": "Using research/market.md, build a list of up to {{count}} real companies in {{region}} that fit the ICP for: {{prompt}}. Only companies you actually found in public sources; leave unknown fields empty. Save sales/leads.csv (company, website, city, size, contact_role, contact_name, email, source_url, fit_score, reason) and write a first message in {{language}} for each lead with fit_score >= 4 to sales/drafts.md.",
+      "dependsOn": ["market"],
+      "successCriteria": "sales/leads.csv and sales/drafts.md; no invented contacts",
+      "loopBackTo": ""
+    },
+    {
+      "id": "sequence",
+      "agent": "marketer",
+      "task": "Turn sales/drafts.md into a 3-message outreach sequence in {{language}} (first message, follow-up after 3 days, last message after 7 days) with 3 subject line options and one short LinkedIn/Instagram DM version. Honest, specific, no invented claims. Write marketing/sequence.md.",
+      "dependsOn": ["leads"],
+      "successCriteria": "marketing/sequence.md",
+      "loopBackTo": ""
+    },
+    {
+      "id": "ops",
+      "agent": "coo",
+      "task": "Write ops/process.md: how to run this lead machine every week with free tools first (Claudestra schedules, Gmail by hand or n8n self-hosted, a Google Sheet as CRM), who does what (Nərmin research, Sales leads, Marketer copy, owner approves and sends), daily sending limits that keep email deliverability safe, the numbers to track (leads, replies, meetings) and where an owner approval is required. End with a checklist and the next three actions.",
+      "dependsOn": ["leads", "sequence"],
+      "successCriteria": "ops/process.md with weekly process, KPIs, approvals and next actions",
+      "loopBackTo": ""
+    }
+  ]
+}

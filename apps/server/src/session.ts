@@ -21,6 +21,8 @@ export type SessionRequest = {
   outputSchema?: Record<string, unknown>;
   skills?: string[];
   mcpServers?: Record<string, McpServerConfig>;
+  // Which MCP tools (mcp__server__tool) this agent may use; engines without native MCP list only these.
+  mcpAllows?: (tool: string) => boolean;
   osSandbox?: boolean;
   claudeCodePath?: string;
 };

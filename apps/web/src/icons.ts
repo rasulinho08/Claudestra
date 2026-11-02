@@ -14,6 +14,8 @@ const ICONS: Record<string, string> = {
   palette: "✎",
   languages: "文",
   megaphone: "📣",
+  gear: "⚙",
+  target: "◎",
   bot: "◆",
 };
 

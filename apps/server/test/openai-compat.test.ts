@@ -94,3 +94,58 @@ test("openai_compat presets: OpenRouter needs a key, Ollama and LM Studio are lo
   const custom = ep({ OPENAI_BASE_URL: "http://localhost:8080/v1/", OPENAI_MODEL: "m" });
   assert.ok(!("error" in custom) && custom.local && custom.baseUrl === "http://localhost:8080/v1");
 });
+
+test("meta engine + MCP bridge: a Meta agent calls an app tool through approvals; persona and training reach the prompt", async () => {
+  const { fileURLToPath } = await import("node:url");
+  const { parseAgent } = await import("../src/agents.ts");
+  const { Training, trainedPrompt } = await import("../src/training.ts");
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const tsx = path.join(here, "..", "..", "..", "node_modules", "tsx", "dist", "cli.mjs");
+  const agent = parseAgent(`---\nid: sales\nname: Sales\npersona: "Aysel"\nstyle: "Short and concrete."\ndescription: d\nmodelClass: mid\ntools: [Read]\nintegrations: [fake]\nlimits:\n  maxTurns: 5\n  maxBudgetUsd: 1\n---\nYou are Sales.`);
+  const store = new RunStore();
+  const training = new Training(store);
+  training.add("sales", { kind: "instruction", text: "Always list the city first." });
+  training.add("sales", { kind: "lesson", rating: "down", text: "Do not guess emails." });
+  const system = trainedPrompt(agent, training);
+  assert.match(system, /^Your name is Aysel; you are the company's Sales\. Your working style: Short and concrete\./);
+  assert.match(system, /Always list the city first\.[\s\S]*Avoid: Do not guess emails\./);
+
+  const seen: Body[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: string | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as Body;
+    seen.push(body);
+    const last = body.messages.at(-1)!;
+    const msg =
+      last.role === "tool"
+        ? { role: "assistant", content: `Found: ${last.content}\n## Summary\nleads found` }
+        : { role: "assistant", content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "mcp__fake__find_places", arguments: JSON.stringify({ city: "Gəncə" }) } }] };
+    return new Response(JSON.stringify({ choices: [{ message: msg }], usage: { prompt_tokens: 1, completion_tokens: 1 } }), { status: 200 });
+  }) as typeof fetch;
+  const authorized: string[] = [];
+  const events: { type: string; data: Record<string, unknown> }[] = [];
+  try {
+    const out = await compatSession({
+      agent: { ...agent, systemPrompt: system },
+      prompt: "find cafes",
+      task: "find cafes",
+      workspace: mkdtempSync(path.join(tmpdir(), "cls-mcp-")),
+      model: "muse",
+      budgetUsd: 1,
+      env: { AUTH_MODE: "meta", META_API_KEY: "k" },
+      controller: new AbortController(),
+      emit: (e) => events.push(e as never),
+      authorize: async (tool) => (authorized.push(tool), { allow: true }),
+      mcpServers: { fake: { type: "stdio", command: process.execPath, args: [tsx, path.join(here, "fixtures", "fake-mcp.ts")] } },
+      mcpAllows: (t) => t.startsWith("mcp__fake__"),
+    });
+    assert.equal(out.ok, true, out.error);
+    assert.match(out.text, /3 cafes in Gəncə/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.ok((seen[0]!.tools as { function: { name: string } }[]).some((t) => t.function.name === "mcp__fake__find_places"));
+  assert.match(seen[0]!.messages[0]!.content!, /Your name is Aysel/);
+  assert.deepEqual(authorized, ["mcp__fake__find_places"]);
+  assert.ok(events.some((e) => e.type === "tool.called" && e.data.tool === "mcp__fake__find_places"));
+});
