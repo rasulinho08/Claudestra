@@ -1,7 +1,7 @@
 // Company HQ (upgrade V4): the home screen. What needs your OK, who is working on what, recent work, what is coming,
 // spend and projects, on one page. Refreshes every few seconds (the same data the Runs page polls).
 import { useCallback, useEffect, useState } from "react";
-import type { RunSummary } from "@claudestra/protocol";
+import type { RunSummary, SessionInfo } from "@claudestra/protocol";
 import { api, errorText } from "../api.ts";
 import { usd } from "../format.ts";
 import { go } from "../router.ts";
@@ -39,7 +39,7 @@ function what(input: unknown): string {
   return input ? JSON.stringify(input).slice(0, 120) : "";
 }
 
-export function HqPage() {
+export function HqPage({ session }: { session?: SessionInfo | null }) {
   const [hq, setHq] = useState<Hq | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -96,6 +96,7 @@ export function HqPage() {
       {error && <div className="error small">{error}</div>}
 
       <div className="hq-grid">
+        {session?.authEnabled && session.user && <MyAgent hq={hq} agentId={session.user.agentId ?? null} />}
         <section className={`hq-card hq-approvals ${hq.approvals.length ? "attention" : ""}`}>
           <h3>⏸ {t("hq.approvals")}</h3>
           {hq.approvals.length === 0 ? (
@@ -256,5 +257,38 @@ export function HqPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+// The signed-in person's own agent: give it a task directly or train it.
+function MyAgent({ hq, agentId }: { hq: Hq; agentId: string | null }) {
+  const a = agentId ? hq.team.find((x) => x.id === agentId) : undefined;
+  return (
+    <section className="hq-card hq-mine" style={a ? ({ "--agent": a.color } as React.CSSProperties) : undefined}>
+      <h3>⭐ {t("hq.myAgent")}</h3>
+      {!a ? (
+        <p className="muted small">{t("hq.noAgent")}</p>
+      ) : (
+        <>
+          <div className="hq-mine-head">
+            <span className="hq-agent-icon">{iconFor(a.icon)}</span>
+            <div>
+              <strong>{a.persona || agentName(a.id, a.name)}</strong>
+              <div className="small muted">
+                {agentName(a.id, a.name)} · {a.skills} ✦ {a.busy ? `· ${t("hq.busy")}` : ""}
+              </div>
+            </div>
+          </div>
+          <div className="row-gap">
+            <button className="hq-new" onClick={() => go("runs", { agent: a.id })}>
+              {t("hq.giveTask")}
+            </button>
+            <a className="small" href="#/agents">
+              🎓 {t("hq.trainIt")} →
+            </a>
+          </div>
+        </>
+      )}
+    </section>
   );
 }

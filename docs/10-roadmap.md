@@ -78,6 +78,8 @@ memory with embeddings, Slack/Telegram notifications for approvals.
   HQ home page (`GET /api/hq`, `HqPage.tsx`; docs/07 "HQ").
 - AI team: personas and per-agent training (`training.ts`, docs/03), COO and Sales agents, MCP bridge for non-Claude
   engines (`mcp-bridge.ts`, docs/05) with Apify, and the *Lead machine* workflow template.
+- Team server (docs/15): users linked to their own agents, direct tasks (`agentId`, run mode `direct`), own-agent
+  editing, `PUBLIC_URL` safety rules, Dockerfile and docker-compose.
 
 ## Open questions
 1. **Primary use case** to optimise first: software building, research reports, or business analysis? (Default assumption: software building.)

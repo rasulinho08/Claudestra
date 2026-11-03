@@ -44,6 +44,10 @@ const evals = new Evals(config.evalsDir, store, launcher, config.workspacesDir);
 evals.onTimeout = (runId) => runner.cancel(runId);
 
 const loopback = ["127.0.0.1", "localhost", "::1"].includes(config.host);
+if (config.publicUrl && !access.enabled) {
+  console.error(`PUBLIC_URL is set (${config.publicUrl}) but login is off. Set AUTH_TOKEN in .env (or add a user with \`npm run user -- add NAME owner\`) before opening Claudestra to other people.`);
+  process.exit(1);
+}
 if (!loopback && !access.enabled) {
   console.error(`Refusing to listen on ${config.host} without login. Set AUTH_TOKEN in .env (or add a user with \`npm run user -- add NAME owner\`).`);
   process.exit(1);

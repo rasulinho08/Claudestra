@@ -387,3 +387,8 @@ input:not([type=range]):not([type=file]) { background: var(--bg); color: var(--t
 .ghost.active-up { border-color: var(--ok); color: var(--ok); }
 .ghost.active-down { border-color: #ef4444; color: #ef4444; }
 .hq-agent-role { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.hq-mine { border-left: 4px solid var(--agent, var(--accent)); }
+.hq-mine-head { display: flex; gap: 10px; align-items: center; }
+.hq-mine-head .hq-agent-icon { font-size: 22px; color: var(--agent, var(--accent)); }
+.target-select { font-weight: 600; }
+.skill-picker { display: flex; flex-wrap: wrap; gap: 6px; }

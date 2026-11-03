@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { SessionInfo } from "@claudestra/protocol";
 import { api, errorText } from "../api.ts";
 import { iconFor } from "../icons.ts";
 import { agentName, t } from "../i18n.ts";
@@ -28,7 +29,10 @@ You are the ${id}. Describe how this agent works here.
 
 // The team (docs/03): give each agent a person's name and working style, train it separately (instructions and
 // lessons from rated work), or edit its agents/<id>.md file directly.
-export function AgentsPage() {
+export function AgentsPage({ session }: { session?: SessionInfo | null }) {
+  // The owner edits everything; a teammate names, trains and picks skills for their own agent only.
+  const isOwner = (session?.user?.role ?? "owner") === "owner";
+  const myAgent = session?.user?.agentId ?? null;
   const [agents, setAgents] = useState<Agent[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [tab, setTab] = useState<"profile" | "file">("profile");
@@ -43,6 +47,7 @@ export function AgentsPage() {
   const current = agents.find((a) => a.id === open);
 
   function select(a: Agent) {
+    setTab("profile");
     setOpen(a.id);
     setDraft(a.source);
     setStatus(null);
@@ -76,9 +81,11 @@ export function AgentsPage() {
       <div className="lib-list">
         <div className="lib-head">
           <h2>{t("nav.agents")}</h2>
-          <button className="ghost" onClick={create}>
-            + {t("agents.new")}
-          </button>
+          {isOwner && (
+            <button className="ghost" onClick={create}>
+              + {t("agents.new")}
+            </button>
+          )}
         </div>
         {agents.map((a) => (
           <button key={a.id} className={`lib-card ${open === a.id ? "active" : ""}`} style={{ borderLeftColor: a.color }} onClick={() => select(a)}>
@@ -116,13 +123,19 @@ export function AgentsPage() {
               <button className={tab === "profile" ? "active" : ""} disabled={isNew} onClick={() => setTab("profile")}>
                 🎓 {t("agents.profile")}
               </button>
-              <button className={tab === "file" ? "active" : ""} onClick={() => setTab("file")}>
-                {t("agents.file")}
-              </button>
+              {isOwner && (
+                <button className={tab === "file" ? "active" : ""} onClick={() => setTab("file")}>
+                  {t("agents.file")}
+                </button>
+              )}
             </div>
             {status && <div className={`small ${status.error ? "error" : "muted"}`}>{status.text}</div>}
             {tab === "profile" && current ? (
-              <Profile key={current.id} agent={current} onSaved={load} />
+              !isOwner && current.id !== myAgent ? (
+                <p className="muted">{t("agents.onlyOwn")}</p>
+              ) : (
+                <Profile key={current.id} agent={current} onSaved={load} />
+              )
             ) : (
               <>
                 <div className="lib-head">
@@ -192,6 +205,22 @@ function Profile({ agent, onSaved }: { agent: Agent; onSaved: () => void }) {
     onSaved();
   }
 
+  const [allSkills, setAllSkills] = useState<{ name: string; description: string }[]>([]);
+  const [picked, setPicked] = useState<string[]>(agent.skills);
+  const [skillMsg, setSkillMsg] = useState<string | null>(null);
+  useEffect(() => {
+    api<{ name: string; description: string }[]>("/api/skills").then(setAllSkills).catch(() => {});
+  }, []);
+  async function saveSkills() {
+    try {
+      await api(`/api/agents/${agent.id}/skills`, { method: "PUT", body: { skills: picked } });
+      setSkillMsg(t("agents.saved"));
+      onSaved();
+    } catch (err) {
+      setSkillMsg(errorText(err));
+    }
+  }
+
   const instructions = items.filter((i) => i.kind === "instruction");
   const lessons = items.filter((i) => i.kind === "lesson");
   return (
@@ -253,6 +282,22 @@ function Profile({ agent, onSaved }: { agent: Agent; onSaved: () => void }) {
           </button>
         </div>
       ))}
+      <h4>{t("agents.skillsTitle")}</h4>
+      <p className="small muted">{t("agents.skillsHelp")}</p>
+      <div className="skill-picker">
+        {allSkills.map((s) => (
+          <label key={s.name} className={`attach-item ${picked.includes(s.name) ? "on" : ""}`} title={s.description} style={{ borderColor: picked.includes(s.name) ? agent.color : undefined }}>
+            <input type="checkbox" checked={picked.includes(s.name)} onChange={(e) => setPicked(e.target.checked ? [...picked, s.name] : picked.filter((x) => x !== s.name))} />
+            {s.name}
+          </label>
+        ))}
+      </div>
+      <div className="row-gap">
+        <button className="ghost" onClick={saveSkills}>
+          {t("agents.saveSkills")}
+        </button>
+        {skillMsg && <span className="small muted">{skillMsg}</span>}
+      </div>
       {prompt && (
         <details className="card">
           <summary className="small">{t("agents.preview")}</summary>

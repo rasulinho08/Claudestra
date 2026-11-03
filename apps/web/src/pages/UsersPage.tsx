@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { Role } from "@claudestra/protocol";
 import { api, errorText } from "../api.ts";
-import { t } from "../i18n.ts";
+import { agentName, t } from "../i18n.ts";
 
-type User = { id: string; name: string; role: Role; createdAt: string; lastSeen: string | null };
+type User = { id: string; name: string; role: Role; agentId: string | null; createdAt: string; lastSeen: string | null };
+type Agent = { id: string; name: string; persona?: string };
 
 // Users and roles (owner only). Creating the first user turns login on for everyone.
 export function UsersPage({ authEnabled }: { authEnabled: boolean }) {
@@ -12,6 +13,22 @@ export function UsersPage({ authEnabled }: { authEnabled: boolean }) {
   const [role, setRole] = useState<Role>("operator");
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentId, setAgentId] = useState("");
+  useEffect(() => {
+    api<Agent[]>("/api/agents")
+      .then((a) => setAgents(a.filter((x) => x.id !== "ceo")))
+      .catch(() => {});
+  }, []);
+  const label = (a: Agent) => `${a.persona || agentName(a.id, a.name)}${a.persona ? ` · ${agentName(a.id, a.name)}` : ""}`;
+  async function link(user: User, id: string) {
+    try {
+      await api(`/api/users/${user.id}/agent`, { method: "PUT", body: { agentId: id || null } });
+      load();
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
 
   const load = () => api<User[]>("/api/users").then(setUsers).catch((e) => setError(errorText(e)));
   useEffect(() => {
@@ -21,7 +38,7 @@ export function UsersPage({ authEnabled }: { authEnabled: boolean }) {
   async function add(e: FormEvent) {
     e.preventDefault();
     try {
-      const res = await api<{ token: string }>("/api/users", { body: { name, role } });
+      const res = await api<{ token: string }>("/api/users", { body: { name, role, agentId: agentId || null } });
       setToken(res.token);
       // The first user turns login on: log this browser in with the new owner token so nobody is locked out.
       if (!authEnabled) {
@@ -53,6 +70,14 @@ export function UsersPage({ authEnabled }: { authEnabled: boolean }) {
             <option value="operator">operator</option>
             <option value="viewer">viewer</option>
           </select>
+          <select value={agentId} onChange={(e) => setAgentId(e.target.value)} title={t("users.agent")}>
+            <option value="">{t("users.noAgent")}</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                ⭐ {label(a)}
+              </option>
+            ))}
+          </select>
           <button type="submit" className="btn-primary" disabled={!name.trim()}>
             Add user
           </button>
@@ -67,7 +92,15 @@ export function UsersPage({ authEnabled }: { authEnabled: boolean }) {
         {users.map((u) => (
           <div key={u.id} className="card row-between">
             <span>
-              <strong>{u.name}</strong> <span className="chip">{u.role}</span> <span className="muted small">last seen {u.lastSeen ? new Date(u.lastSeen).toLocaleString() : "never"}</span>
+              <strong>{u.name}</strong> <span className="chip">{u.role}</span>{" "}
+              <select value={u.agentId ?? ""} onChange={(e) => link(u, e.target.value)} title={t("users.agent")}>
+                <option value="">{t("users.noAgent")}</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    ⭐ {label(a)}
+                  </option>
+                ))}
+              </select> <span className="muted small">last seen {u.lastSeen ? new Date(u.lastSeen).toLocaleString() : "never"}</span>
             </span>
             <button className="ghost" onClick={() => api(`/api/users/${u.id}`, { method: "DELETE" }).then(load)}>
               Remove

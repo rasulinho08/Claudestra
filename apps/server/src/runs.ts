@@ -26,6 +26,8 @@ export type RunRequest = {
   params?: Record<string, string>;
   language?: AnswerLanguage;
   projectId?: string;
+  // Straight to one agent ("my agent"), no CEO planning.
+  agentId?: string;
   createdBy?: string;
   // Who started it: "user", "trigger:<id>", "eval:<id>".
   origin?: string;
@@ -70,6 +72,15 @@ export class RunLauncher {
       if (unknown) throw new HttpError(400, `workflow uses unknown agent "${unknown.agent}"`);
     }
     if (!prompt) throw new HttpError(400, "prompt is required");
+    if (req.agentId && !req.workflowId) {
+      const target = this.agents.get(req.agentId);
+      if (!target || req.agentId === "ceo") throw new HttpError(404, "agent not found");
+      plan = {
+        route: "single_agent",
+        summary: `Direct task for ${target.info.persona || target.info.name}`,
+        steps: [{ id: "s1", agent: target.info.id, task: prompt, dependsOn: [], successCriteria: "", loopBackTo: "" }],
+      };
+    }
 
     const runId = randomUUID();
     // Project runs start from a copy of the project's files (projects.ts).
@@ -98,7 +109,7 @@ export class RunLauncher {
         agents: this.agents.infos(),
         profile,
         approvalMode,
-        mode: plan ? "workflow" : "dynamic",
+        mode: req.agentId && !req.workflowId ? "direct" : plan ? "workflow" : "dynamic",
         workflowId: req.workflowId,
         origin: req.origin ?? "user",
         createdBy: req.createdBy,

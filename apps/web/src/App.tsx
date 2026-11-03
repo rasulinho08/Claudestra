@@ -77,11 +77,11 @@ export function App() {
       {(health?.warning || error) && <div className="banner">{error ?? health?.warning}</div>}
       <div className="page">
         {route.page === "hq" ? (
-          <HqPage />
+          <HqPage session={session} />
         ) : route.page === "projects" ? (
           <ProjectsPage key={route.params.get("id") ?? ""} initial={route.params.get("id")} />
         ) : route.page === "agents" ? (
-          <AgentsPage />
+          <AgentsPage session={session} />
         ) : route.page === "skills" ? (
           <SkillsPage />
         ) : route.page === "apps" ? (
@@ -97,7 +97,7 @@ export function App() {
         ) : route.page === "users" ? (
           <UsersPage authEnabled={Boolean(session?.authEnabled)} />
         ) : (
-          <RunsPage health={health} initialRun={route.params.get("run")} initialProject={route.params.get("project")} />
+          <RunsPage health={health} session={session} initialRun={route.params.get("run")} initialProject={route.params.get("project")} initialAgent={route.params.get("agent")} />
         )}
       </div>
     </div>

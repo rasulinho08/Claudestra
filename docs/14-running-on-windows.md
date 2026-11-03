@@ -144,6 +144,11 @@ is done, click **Changes** in the top bar of the task, look at the diff, untick 
   Nərmin researches, Sales builds `sales/leads.csv` and first messages, the Marketer writes the sequence, Daryanur the
   weekly process. Nothing is sent automatically.
 
+## The whole team on one address
+
+See docs/15: `npm run build` + `npm start`, a free Cloudflare Tunnel, `PUBLIC_URL` and `AUTH_TOKEN` in `.env`, then
+add each person on the Users page with their own agent.
+
 ## Where the results are
 
 Each task writes its files into `Claudestra\workspaces\<run id>\` (the id is in the address bar after `run=`).

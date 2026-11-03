@@ -179,3 +179,62 @@ test("templates are listed, imported, exported with positions", async () => {
   assert.equal(exp.positions.repro?.x, 10);
   assert.equal((await req("POST", "/api/workflows", { name: "bad", steps: [{ id: "s1", agent: "ghost", task: "t" }] })).status, 400);
 });
+
+test("team: each person has their own agent, direct runs skip the CEO, only the owner auto-approves", async () => {
+  const { req, store } = setup({}, (s) => new Access(s, "owner-secret"));
+  const owner = { authorization: "Bearer owner-secret" };
+  const created = (await (await req("POST", "/api/users", { name: "nihad", role: "operator", agentId: "project-manager" }, owner)).json()) as { token: string; user: { agentId: string } };
+  assert.equal(created.user.agentId, "project-manager");
+  const nihad = { authorization: `Bearer ${created.token}` };
+  const session = (await (await req("GET", "/api/session", undefined, nihad)).json()) as { user: { agentId: string } };
+  assert.equal(session.user.agentId, "project-manager");
+
+  // Own agent: may train it; someone else's agent: no.
+  assert.equal((await req("POST", "/api/agents/project-manager/training", { kind: "instruction", text: "Sprint report starts with a summary." }, nihad)).status, 201);
+  assert.equal((await req("PUT", "/api/agents/coder/persona", { persona: "X" }, nihad)).status, 403);
+  assert.equal((await req("PUT", "/api/agents/project-manager", { source: "---\nid: project-manager\n---\nx" }, nihad)).status, 403, "not the agent file (tools)");
+
+  // Direct run to my agent: one step, no CEO planning.
+  const run = (await (await req("POST", "/api/runs", { prompt: "Sprint 14 report", agentId: "project-manager" }, nihad)).json()) as { runId: string };
+  const started = store.events(run.runId).find((e) => e.type === "run.started")!;
+  assert.equal((started.data as { mode: string }).mode, "direct");
+  assert.equal((await req("POST", "/api/runs", { prompt: "x", agentId: "ceo" }, nihad)).status, 404);
+  assert.equal((await req("POST", "/api/runs", { prompt: "x", approvalMode: "auto" }, nihad)).status, 403);
+  assert.equal((await req("POST", "/api/runs", { prompt: "x", approvalMode: "auto" }, owner)).status, 201);
+
+  // Owner links and unlinks agents.
+  const users = (await (await req("GET", "/api/users", undefined, owner)).json()) as { id: string; name: string }[];
+  const id = users.find((u) => u.name === "nihad")!.id;
+  assert.equal((await req("PUT", `/api/users/${id}/agent`, { agentId: "researcher" }, owner)).status, 200);
+  assert.equal((await req("PUT", `/api/users/${id}/agent`, { agentId: "ceo" }, owner)).status, 400);
+  assert.equal((await req("PUT", `/api/users/${id}/agent`, { agentId: null }, nihad)).status, 403);
+});
+
+test("direct plan: the launcher builds a one-step plan for the chosen agent", async () => {
+  const cfg = testConfig({ workspacesDir: mkdtempSync(path.join(tmpdir(), "cls-")) });
+  const store = new RunStore();
+  let seen: { plan?: { route: string; steps: { agent: string; task: string }[] } } = {};
+  const launcher = new RunLauncher(cfg, store, testAgents(), new WorkflowStore(store), { start: async (_id, opts) => void (seen = opts as typeof seen) });
+  launcher.start({ prompt: "Find 10 cafes", agentId: "researcher" });
+  assert.equal(seen.plan?.route, "single_agent");
+  assert.deepEqual(seen.plan?.steps.map((s) => [s.agent, s.task]), [["researcher", "Find 10 cafes"]]);
+});
+
+test("public address: tunnel requests are not 'this computer', its host is allowed", async () => {
+  const { req } = setup({ publicUrl: "https://team.example.com", allowedHosts: ["team.example.com"] });
+  const viaTunnel = (await (await req("GET", "/api/health", undefined, { host: "team.example.com", "cf-connecting-ip": "1.2.3.4" })).json()) as { results: { openFolder: boolean } };
+  assert.equal(viaTunnel.results.openFolder, false);
+  assert.equal((await req("GET", "/api/health", undefined, { host: "evil.example.com" })).status, 403);
+});
+
+test("shared server: a teammate cannot allow shell commands, the owner can", async () => {
+  const { req, store } = setup({ publicUrl: "https://team.example.com", allowedHosts: ["team.example.com"] }, (s) => new Access(s, "owner-secret"));
+  const owner = { authorization: "Bearer owner-secret", host: "team.example.com" };
+  const { token } = (await (await req("POST", "/api/users", { name: "turan", role: "operator" }, owner)).json()) as { token: string };
+  store.create({ id: "r9", prompt: "x", source: "claudestra" });
+  store.recordApproval({ id: "a1", runId: "r9", stepId: "s1", kind: "tool", request: { tool: "Bash", input: { command: "rm -rf /" }, reason: "" } });
+  const turan = { authorization: `Bearer ${token}`, host: "team.example.com" };
+  assert.equal((await req("POST", "/api/runs/r9/approvals/a1", { decision: "approve" }, turan)).status, 403);
+  assert.equal((await req("POST", "/api/runs/r9/approvals/a1", { decision: "reject" }, turan)).status, 404, "reject passes the check (no live run here)");
+  assert.equal((await req("POST", "/api/runs/r9/approvals/a1", { decision: "approve" }, owner)).status, 404, "owner passes the check");
+});

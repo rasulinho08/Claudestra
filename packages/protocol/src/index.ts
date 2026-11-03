@@ -19,7 +19,8 @@ export type Profile = z.infer<typeof Profile>;
 export const ApprovalMode = z.enum(["manual", "smart", "auto"]);
 export type ApprovalMode = z.infer<typeof ApprovalMode>;
 
-export const RunMode = z.enum(["dynamic", "workflow"]);
+// direct = a task sent straight to one agent ("my agent"), without CEO planning.
+export const RunMode = z.enum(["dynamic", "workflow", "direct"]);
 
 // Language of the final answer and user-facing files; "auto" = the language of the request.
 export const AnswerLanguage = z.enum(["auto", "az", "en", "ru", "tr"]);
@@ -190,7 +191,8 @@ export type RunSummary = {
 
 export const Role = z.enum(["owner", "operator", "viewer"]);
 export type Role = z.infer<typeof Role>;
-export type SessionInfo = { authEnabled: boolean; user: { name: string; role: Role } | null };
+// agentId: the agent this person owns ("my agent"); they may train and name it.
+export type SessionInfo = { authEnabled: boolean; user: { name: string; role: Role; agentId?: string | null } | null };
 
 export const CreateRunRequest = z.object({
   prompt: z.string().trim().max(20_000).default(""),
@@ -200,6 +202,8 @@ export const CreateRunRequest = z.object({
   params: z.record(z.string(), z.string()).default({}),
   language: AnswerLanguage.optional(),
   projectId: z.string().max(64).optional(),
+  // Send the task straight to this agent instead of the CEO.
+  agentId: z.string().max(64).optional(),
 });
 export type CreateRunRequest = z.infer<typeof CreateRunRequest>;
 

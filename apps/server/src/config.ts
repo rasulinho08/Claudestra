@@ -71,10 +71,21 @@ export type Config = {
   // Projects (upgrade A3): Claudestra-managed project folders and the undo snapshots of applied changes.
   projectsDir: string;
   snapshotsDir: string;
+  // The address people use from outside (e.g. https://team.example.com through a tunnel or proxy). When set, login is
+  // required, requests through it never count as "this computer", and its host name is allowed.
+  publicUrl: string | null;
 };
 
 const localEngine = (e: NodeJS.ProcessEnv) =>
   ["ollama", "lmstudio", "lm-studio", "lm_studio"].includes((e.OPENAI_PROVIDER ?? "").toLowerCase()) || /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(e.OPENAI_BASE_URL ?? "");
+
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+};
 
 export const DEFAULT_NEVER_AUTO = ["Bash:*git push*", "Bash:*rm -rf*", "Bash:*sudo *", "mcp__*__create_*", "mcp__*__delete_*", "mcp__*__update_*", "mcp__*__push_*", "mcp__*__merge_*"];
 
@@ -142,7 +153,8 @@ export function loadConfig(): Config {
     githubToken: process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || null,
     githubApiUrl: process.env.GITHUB_API_URL || "https://api.github.com",
     webOrigins: list("WEB_ORIGINS", ["http://127.0.0.1:5173", "http://localhost:5173"]),
-    allowedHosts: list("ALLOWED_HOSTS", []),
+    allowedHosts: [...list("ALLOWED_HOSTS", []), ...(process.env.PUBLIC_URL ? [hostOf(process.env.PUBLIC_URL)] : [])].filter(Boolean),
+    publicUrl: process.env.PUBLIC_URL?.replace(/\/+$/, "") || null,
     projectsDir: path.resolve(repoRoot, process.env.PROJECTS_DIR ?? "projects"),
     snapshotsDir: path.resolve(repoRoot, process.env.SNAPSHOTS_DIR ?? "data/snapshots"),
   };

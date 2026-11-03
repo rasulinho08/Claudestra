@@ -26,7 +26,7 @@ import { Training } from "./training.ts";
 import { startOfDay, startOfMonth } from "./analytics.ts";
 import { HttpError, RunLauncher } from "./runs.ts";
 import { Memory } from "./memory.ts";
-import { Access, allows, requiredRole, safeEqual, tokenFrom } from "./access.ts";
+import { Access, allows, ownAgentPath, requiredRole, safeEqual, tokenFrom } from "./access.ts";
 import { TriggerInput, TriggerStore, paramsFromPayload, runTrigger, verifyWebhook, type Fire } from "./triggers.ts";
 import { Evals } from "./evals.ts";
 
@@ -115,6 +115,9 @@ function fail(c: Context, err: unknown) {
 
 const isLoopback = (addr: string | undefined) => !addr || addr === "127.0.0.1" || addr === "::1" || addr === "::ffff:127.0.0.1";
 
+const LOCAL_NAMES = ["localhost", "127.0.0.1", "::1"];
+const hostName = (host: string | undefined) => (host ?? "").replace(/:\d+$/, "").replace(/^\[|\]$/g, "").toLowerCase();
+
 function remoteAddress(c: Context): string | undefined {
   try {
     return getConnInfo(c).remote.address;
@@ -136,6 +139,13 @@ export function createApp(s: Services) {
   const templatesDir = s.templatesDir ?? path.join(config.agentsDir, "../templates");
   const app = new Hono<Env>();
   const observers = new Map<string, HookEventMapper>();
+
+  // "This computer": a loopback connection that also addressed the server by a local name. A tunnel (cloudflared) or a
+  // reverse proxy on this PC also connects from 127.0.0.1, but with the public host name, so it never counts.
+  const isLocal = (c: Context) => {
+    const name = hostName(c.req.header("x-forwarded-host") ?? c.req.header("host"));
+    return isLoopback(remoteAddress(c)) && (name === "" || LOCAL_NAMES.includes(name)) && !c.req.header("x-forwarded-for") && !c.req.header("cf-connecting-ip");
+  };
 
   // ---- access control ------------------------------------------------------------------------
   // Public: health, session, login/logout, webhook triggers (own secret). Observer hooks: loopback or HOOKS_SECRET.
@@ -166,7 +176,9 @@ export function createApp(s: Services) {
     c.set("user", user);
     if (!access.enabled || PUBLIC.some((re) => re.test(c.req.path))) return next();
     if (!user) return c.json({ error: "login required" }, 401);
-    if (!allows(user.role, requiredRole(c.req.method, c.req.path))) return c.json({ error: `the ${user.role} role cannot do this` }, 403);
+    const own = ownAgentPath(c.req.path, c.req.method);
+    const ownsIt = own !== null && user.role !== "viewer" && user.agentId === own;
+    if (!ownsIt && !allows(user.role, requiredRole(c.req.method, c.req.path))) return c.json({ error: `the ${user.role} role cannot do this` }, 403);
     return next();
   });
 
@@ -188,16 +200,23 @@ export function createApp(s: Services) {
 
   app.get("/api/users", (c) => c.json(access.users()));
   app.post("/api/users", async (c) => {
-    const parsed = z.object({ name: z.string(), role: Role }).safeParse(await body(c));
+    const parsed = z.object({ name: z.string(), role: Role, agentId: z.string().max(64).nullable().optional() }).safeParse(await body(c));
     if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
     if (!access.enabled && parsed.data.role !== "owner") return c.json({ error: "the first user must be an owner (it turns login on)" }, 400);
+    if (parsed.data.agentId && !agents.get(parsed.data.agentId)) return c.json({ error: "unknown agent" }, 400);
     try {
-      return c.json(access.addUser(parsed.data.name, parsed.data.role), 201);
+      return c.json(access.addUser(parsed.data.name, parsed.data.role, parsed.data.agentId ?? null), 201);
     } catch (err) {
       return fail(c, err);
     }
   });
   app.delete("/api/users/:id", (c) => c.json({ ok: access.removeUser(c.req.param("id")) }));
+  app.put("/api/users/:id/agent", async (c) => {
+    const parsed = z.object({ agentId: z.string().max(64).nullable() }).safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    if (parsed.data.agentId && (!agents.get(parsed.data.agentId) || parsed.data.agentId === "ceo")) return c.json({ error: "unknown agent" }, 400);
+    return access.setAgent(c.req.param("id"), parsed.data.agentId) ? c.json({ ok: true }) : c.json({ error: "user not found" }, 404);
+  });
 
   app.get("/api/health", (c) => {
     const auth = resolveSdkAuth(config.authMode, process.env);
@@ -212,9 +231,10 @@ export function createApp(s: Services) {
       agents: agents.infos(),
       warning: auth.ok ? auth.warning : auth.reason,
       results: {
-        previewPort: config.previewPort && (s.previewRunning?.() ?? false) ? config.previewPort : null,
+        // Through a public address the preview port is not reachable unless PREVIEW_URL names its own public host.
+        previewPort: config.previewPort && (s.previewRunning?.() ?? false) && (!config.publicUrl || config.previewUrl) ? config.previewPort : null,
         previewUrl: config.previewUrl,
-        openFolder: isLoopback(remoteAddress(c)) && ["127.0.0.1", "localhost", "::1"].includes(config.host),
+        openFolder: isLocal(c) && LOCAL_NAMES.includes(config.host),
         github: Boolean(config.githubToken),
       },
     };
@@ -229,7 +249,10 @@ export function createApp(s: Services) {
     const parsed = CreateRunRequest.safeParse(await body(c));
     if (!parsed.success) return c.json({ error: "invalid request" }, 400);
     try {
-      const { runId } = launcher.start({ ...parsed.data, createdBy: c.get("user")?.name, origin: "user" });
+      // Auto-approve runs Bash on this server without asking: only the owner may choose it.
+      const user = c.get("user");
+      if (parsed.data.approvalMode === "auto" && user && user.role !== "owner") return c.json({ error: "only the owner can start runs in auto-approve mode" }, 403);
+      const { runId } = launcher.start({ ...parsed.data, createdBy: user?.name, origin: "user" });
       return c.json({ runId }, 201);
     } catch (err) {
       return fail(c, err);
@@ -247,6 +270,18 @@ export function createApp(s: Services) {
   app.post("/api/runs/:id/approvals/:approvalId", async (c) => {
     const parsed = ApprovalDecision.safeParse(await body(c));
     if (!parsed.success) return c.json({ error: "decision must be approve, approve_run or reject" }, 400);
+    // On a shared server (PUBLIC_URL), shell commands run on the host: only the owner may allow them.
+    const user = c.get("user");
+    if (config.publicUrl && parsed.data.decision !== "reject" && user && user.role !== "owner") {
+      const row = store.database.prepare("SELECT request FROM approvals WHERE id = ? AND run_id = ?").get(c.req.param("approvalId"), c.req.param("id")) as { request: string } | undefined;
+      let tool = "";
+      try {
+        tool = String((JSON.parse(row?.request ?? "{}") as { tool?: unknown }).tool ?? "");
+      } catch {
+        // unknown request shape: treat as not a shell command
+      }
+      if (tool === "Bash") return c.json({ error: "only the owner can allow shell commands on the shared server" }, 403);
+    }
     const ok = runner.decide(c.req.param("id"), c.req.param("approvalId"), parsed.data.decision, parsed.data.note);
     return ok ? c.json({ ok }) : c.json({ error: "no pending approval with that id" }, 404);
   });
@@ -335,7 +370,7 @@ export function createApp(s: Services) {
       return fail(c, err);
     }
     if (!existsSync(dir) || !statSync(dir).isDirectory()) return c.json({ error: "this run has no workspace folder yet", path: dir }, 404);
-    if (!isLoopback(remoteAddress(c)) || !["127.0.0.1", "localhost", "::1"].includes(config.host)) return c.json({ error: "only available when Claudestra runs on this computer", path: dir }, 403);
+    if (!isLocal(c) || !LOCAL_NAMES.includes(config.host)) return c.json({ error: "only available when Claudestra runs on this computer", path: dir }, 403);
     try {
       (s.openFolder ?? openInFileManager)(dir);
       return c.json({ ok: true, path: dir });
@@ -539,6 +574,22 @@ export function createApp(s: Services) {
     if (!agents.get(c.req.param("id"))) return c.json({ error: "agent not found" }, 404);
     try {
       return c.json(agents.setPersona(c.req.param("id"), parsed.data.persona, parsed.data.style).info);
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  // Pick the skills of one agent (the agent's owner may do this for their own agent).
+  app.put("/api/agents/:id/skills", async (c) => {
+    const parsed = z.object({ skills: z.array(z.string().regex(/^[a-z0-9-]{1,64}$/)).max(40) }).safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    const a = agents.get(c.req.param("id"));
+    if (!a || a.info.id === "ceo") return c.json({ error: "agent not found" }, 404);
+    const known = new Set(skills.list().map((s) => s.name));
+    const unknown = parsed.data.skills.filter((s) => !known.has(s));
+    if (unknown.length) return c.json({ error: `unknown skills: ${unknown.join(", ")}` }, 400);
+    try {
+      return c.json({ skills: agents.setSkills(a.info.id, parsed.data.skills).skills });
     } catch (err) {
       return fail(c, err);
     }
@@ -786,7 +837,7 @@ export function createApp(s: Services) {
   app.post("/hooks/:event", async (c) => {
     if (access.enabled) {
       const given = c.req.header("x-claudestra-secret");
-      const ok = s.hooksSecret ? Boolean(given) && safeEqual(given!, s.hooksSecret) : isLoopback(remoteAddress(c));
+      const ok = s.hooksSecret ? Boolean(given) && safeEqual(given!, s.hooksSecret) : isLocal(c);
       if (!ok) return c.json({ error: "hooks need HOOKS_SECRET or a local connection" }, 401);
     }
     const event = c.req.param("event");

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import type { AnswerLanguage, ApprovalMode, ClaudestraEvent, HealthResponse, Profile, RunSummary } from "@claudestra/protocol";
+import type { AnswerLanguage, ApprovalMode, ClaudestraEvent, HealthResponse, Profile, RunSummary, SessionInfo } from "@claudestra/protocol";
 import { useRunEvents } from "./useRunEvents.ts";
 import { activeStep, emptyRun, reduceRun, totalUsage, type RunView } from "./run-state.ts";
 import { Canvas } from "./Canvas.tsx";
@@ -32,7 +32,7 @@ function save(key: string, value: unknown) {
   }
 }
 
-export function RunsPage({ health, initialRun, initialProject }: { health: HealthResponse | null; initialRun: string | null; initialProject?: string | null }) {
+export function RunsPage({ health, session, initialRun, initialProject, initialAgent }: { health: HealthResponse | null; session?: SessionInfo | null; initialRun: string | null; initialProject?: string | null; initialAgent?: string | null }) {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [runId, setRunId] = useState<string | null>(initialRun);
   const [selection, setSelection] = useState<Selection>(null);
@@ -47,6 +47,13 @@ export function RunsPage({ health, initialRun, initialProject }: { health: Healt
   const [cursor, setCursor] = useState<number | null>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [projectId, setProjectId] = useState<string>(initialProject ?? "");
+  // Who gets the task: "" = the whole company (CEO plans), or one agent directly ("my agent").
+  const myAgent = session?.user?.agentId ?? "";
+  const [target, setTarget] = useState<string>(initialAgent ?? myAgent);
+  useEffect(() => {
+    if (!initialAgent && myAgent) setTarget(myAgent);
+  }, [myAgent, initialAgent]);
+  const isOwner = (session?.user?.role ?? "owner") === "owner";
   useEffect(() => {
     api<{ projects: { id: string; name: string }[] }>("/api/projects")
       .then((r) => setProjects(r.projects))
@@ -55,7 +62,9 @@ export function RunsPage({ health, initialRun, initialProject }: { health: Healt
   const live = useRunEvents(runId);
 
   const profile = opts.profile || health?.defaultProfile || "balanced";
-  const approvalMode = opts.approvalMode || health?.defaultApprovalMode || "smart";
+  const chosenMode = opts.approvalMode || health?.defaultApprovalMode || "smart";
+  // Auto-approve runs Bash on the server without asking: the owner only.
+  const approvalMode = !isOwner && chosenMode === "auto" ? "smart" : chosenMode;
 
   // Replay: rebuild the view from the first `cursor` events (docs/04 "Replay").
   const run: RunView = useMemo(() => (cursor === null ? live.run : live.events.slice(0, cursor).reduce(reduceRun, emptyRun())), [cursor, live]);
@@ -108,7 +117,7 @@ export function RunsPage({ health, initialRun, initialProject }: { health: Healt
     setSending(true);
     setError(null);
     try {
-      const body = await api<{ runId: string }>("/api/runs", { body: { prompt, profile, approvalMode, language: opts.language, projectId: projectId || undefined } });
+      const body = await api<{ runId: string }>("/api/runs", { body: { prompt, profile, approvalMode, language: opts.language, projectId: projectId || undefined, agentId: target || undefined } });
       openRun(body.runId);
       setPrompt("");
       refreshRuns();
@@ -202,12 +211,26 @@ export function RunsPage({ health, initialRun, initialProject }: { health: Healt
         />
         <div className="composer-side">
           <div className="segmented" role="group" aria-label={t("composer.mode")}>
-            {(["manual", "smart", "auto"] as const).map((m) => (
+            {(isOwner ? (["manual", "smart", "auto"] as const) : (["manual", "smart"] as const)).map((m) => (
               <button type="button" key={m} className={approvalMode === m ? `active mode-${m}` : ""} onClick={() => setOption({ approvalMode: m })} title={t(`modeHelp.${m}`)}>
                 {t(`mode.${m}`)}
               </button>
             ))}
           </div>
+          <select className="target-select" value={target} onChange={(e) => setTarget(e.target.value)} title={t("composer.target")} aria-label={t("composer.target")}>
+            <option value="">🏢 {t("composer.general")}</option>
+            {health?.agents
+              .filter((a) => a.id !== "ceo")
+              .sort((a, b) => Number(b.id === myAgent) - Number(a.id === myAgent))
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.id === myAgent ? "⭐ " : "👤 "}
+                  {a.persona || agentName(a.id, a.name)}
+                  {a.persona ? ` · ${agentName(a.id, a.name)}` : ""}
+                  {a.id === myAgent ? ` (${t("composer.mine")})` : ""}
+                </option>
+              ))}
+          </select>
           {projects.length > 0 && (
             <select value={projectId} onChange={(e) => setProjectId(e.target.value)} title={t("composer.project")} aria-label={t("composer.project")}>
               <option value="">{t("composer.noProject")}</option>
@@ -266,6 +289,7 @@ function RunBar(p: {
       {run.approvalMode === "auto" && live && !p.replaying && <span className="chip chip-auto">{t("bar.autoApprove")}</span>}
       {run.profile && <span className="chip">{run.profile}</span>}
       {run.mode === "workflow" && <span className="chip">{t("bar.workflow")}</span>}
+      {run.mode === "direct" && run.plan?.steps[0] && <span className="chip">→ {agentFor(run, run.plan.steps[0].agent).name}</span>}
       {run.project && (
         <a className="chip" href={`#/projects?id=${run.project.id}`} title={t("nav.projects")}>
           📁 {run.project.name}

@@ -6,7 +6,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import type { Role, SessionInfo } from "@claudestra/protocol";
 import type { RunStore } from "./store.ts";
 
-export type User = { id: string; name: string; role: Role; createdAt: string; lastSeen: string | null };
+export type User = { id: string; name: string; role: Role; agentId: string | null; createdAt: string; lastSeen: string | null };
 
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 
@@ -21,6 +21,8 @@ export class Access {
     this.store.database.exec(`CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, role TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE,
       created_at TEXT NOT NULL, last_seen TEXT)`);
+    const cols = (this.store.database.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes("agent_id")) this.store.database.exec("ALTER TABLE users ADD COLUMN agent_id TEXT");
   }
 
   get enabled(): boolean {
@@ -28,21 +30,27 @@ export class Access {
   }
 
   users(): User[] {
-    return (this.store.database.prepare("SELECT id, name, role, created_at, last_seen FROM users ORDER BY created_at").all() as { id: string; name: string; role: Role; created_at: string; last_seen: string | null }[]).map((u) => ({
+    return (this.store.database.prepare("SELECT id, name, role, agent_id, created_at, last_seen FROM users ORDER BY created_at").all() as { id: string; name: string; role: Role; agent_id: string | null; created_at: string; last_seen: string | null }[]).map((u) => ({
       id: u.id,
       name: u.name,
       role: u.role,
+      agentId: u.agent_id,
       createdAt: u.created_at,
       lastSeen: u.last_seen,
     }));
   }
 
   // Returns the new user's token once; only its hash is stored.
-  addUser(name: string, role: Role): { user: User; token: string } {
+  // Links a person to "their" agent (or unlinks with null).
+  setAgent(nameOrId: string, agentId: string | null): boolean {
+    return Number(this.store.database.prepare("UPDATE users SET agent_id = ? WHERE id = ? OR name = ?").run(agentId, nameOrId, nameOrId).changes) > 0;
+  }
+
+  addUser(name: string, role: Role, agentId: string | null = null): { user: User; token: string } {
     if (!/^[\w.@-]{1,64}$/.test(name)) throw new Error("names are 1–64 letters, digits, . _ - @");
     const token = `cls_${randomBytes(24).toString("base64url")}`;
     const id = randomUUID();
-    this.store.database.prepare("INSERT INTO users (id, name, role, token_hash, created_at) VALUES (?, ?, ?, ?, ?)").run(id, name, role, hash(token), new Date().toISOString());
+    this.store.database.prepare("INSERT INTO users (id, name, role, token_hash, created_at, agent_id) VALUES (?, ?, ?, ?, ?, ?)").run(id, name, role, hash(token), new Date().toISOString(), agentId);
     return { user: this.users().find((u) => u.id === id)!, token };
   }
 
@@ -53,10 +61,10 @@ export class Access {
   identify(token: string | undefined | null): SessionInfo["user"] {
     if (!token) return null;
     if (this.ownerToken && safeEqual(token, this.ownerToken)) return { name: "owner", role: "owner" };
-    const row = this.store.database.prepare("SELECT id, name, role FROM users WHERE token_hash = ?").get(hash(token)) as { id: string; name: string; role: Role } | undefined;
+    const row = this.store.database.prepare("SELECT id, name, role, agent_id FROM users WHERE token_hash = ?").get(hash(token)) as { id: string; name: string; role: Role; agent_id: string | null } | undefined;
     if (!row) return null;
     this.store.database.prepare("UPDATE users SET last_seen = ? WHERE id = ?").run(new Date().toISOString(), row.id);
-    return { name: row.name, role: row.role };
+    return { name: row.name, role: row.role, agentId: row.agent_id };
   }
 }
 
@@ -70,6 +78,13 @@ export function requiredRole(method: string, path: string): Role {
   if (/^\/api\/runs\/[^/]+\/(github|open-folder|apply|undo-apply)$/.test(path)) return "owner";
   if (OPERATOR_WRITES.some((re) => re.test(path))) return "operator";
   return "owner";
+}
+
+// A person may name, train and pick skills for their own agent without being owner (not its tools or file).
+export function ownAgentPath(path: string, method: string): string | null {
+  if (method === "GET" || method === "HEAD") return null;
+  const m = /^\/api\/agents\/([^/]+)\/(persona|skills|training(?:\/[^/]+)?)$/.exec(path);
+  return m ? m[1]! : null;
 }
 
 const RANK: Record<Role, number> = { viewer: 0, operator: 1, owner: 2 };

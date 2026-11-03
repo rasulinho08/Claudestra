@@ -1,0 +1,18 @@
+# One Claudestra for the whole team. Secrets live in .env (never commit it).
+# Data that must survive updates is kept in volumes: database, run folders, projects, and the agents/skills the team edits.
+services:
+  claudestra:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:8787:8787"   # put a tunnel or reverse proxy (HTTPS) in front; do not expose directly
+      - "127.0.0.1:8788:8788"
+    volumes:
+      - ./data:/app/data
+      - ./workspaces:/app/workspaces
+      - ./projects:/app/projects
+      - ./agents:/app/agents
+      - ./skills:/app/skills

@@ -50,6 +50,7 @@ export function testConfig(over: Partial<Config> = {}): Config {
     githubApiUrl: "https://api.github.invalid",
     webOrigins: ["http://127.0.0.1:5173"],
     allowedHosts: [],
+    publicUrl: null,
     projectsDir: path.join(process.env.TMPDIR ?? "/tmp", "claudestra-test-projects"),
     snapshotsDir: path.join(process.env.TMPDIR ?? "/tmp", "claudestra-test-snapshots"),
     ...over,

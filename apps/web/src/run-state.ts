@@ -59,7 +59,7 @@ export type RunView = {
   budgetWarning?: string;
   profile?: Profile;
   approvalMode?: ApprovalMode;
-  mode?: "dynamic" | "workflow";
+  mode?: "dynamic" | "workflow" | "direct";
   paused: boolean;
   pending: PendingApproval[];
   // Project runs (upgrade A3): the project and the latest apply/undo of the run's changes.
