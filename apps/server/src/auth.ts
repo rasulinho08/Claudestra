@@ -36,7 +36,7 @@ export function resolveSdkAuth(mode: AuthMode, env: NodeJS.ProcessEnv): SdkAuth 
       return {
         ok: true,
         env: base,
-        warning: "Using Google Gemini. Agents use Claudestra's own tools (files, Bash, web) and skills; MCP apps need Claude.",
+        warning: "Using Google Gemini. Agents use Claudestra's own tools (files, Bash, web) and skills, plus MCP apps from integrations.json through the bridge.",
       };
     case "meta":
     case "openai_compat": {
@@ -45,7 +45,7 @@ export function resolveSdkAuth(mode: AuthMode, env: NodeJS.ProcessEnv): SdkAuth 
       return {
         ok: true,
         env: { ...base, AUTH_MODE: mode },
-        warning: `Using ${ep.name} (${ep.baseUrl}). Agents use Claudestra's own tools (files, Bash, web) and skills; MCP apps need Claude.`,
+        warning: `Using ${ep.name} (${ep.baseUrl}). Agents use Claudestra's own tools (files, Bash, web) and skills, plus MCP apps from integrations.json through the bridge.`,
       };
     }
     case "demo":

@@ -1,6 +1,6 @@
 // AUTH_MODE=gemini: runs an agent step on Google's Gemini API (generateContent + function calling) instead of the
 // Claude Agent SDK. Tools are Claudestra's own (local-tools.ts) and go through the same approval policy.
-// Skills work through the Skill tool (local-tools.ts); MCP apps need Claude.
+// Skills work through the Skill tool (local-tools.ts); MCP apps (integrations.json) go through the MCP bridge (mcp-bridge.ts).
 import { randomUUID } from "node:crypto";
 import type { EventData } from "@claudestra/protocol";
 import type { SessionRunner } from "./session.ts";
