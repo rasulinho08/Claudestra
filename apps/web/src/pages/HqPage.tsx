@@ -280,7 +280,7 @@ function MyAgent({ hq, agentId }: { hq: Hq; agentId: string | null }) {
             </div>
           </div>
           <div className="row-gap">
-            <button className="hq-new" onClick={() => go("runs", { agent: a.id })}>
+            <button className="hq-new" onClick={() => go("chat", { agent: a.id })}>
               {t("hq.giveTask")}
             </button>
             <a className="small" href="#/agents">

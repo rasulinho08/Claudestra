@@ -23,6 +23,7 @@ import { SkillImportError, importSkill } from "./skill-import.ts";
 import type { PreviewTokens } from "./preview.ts";
 import { ProjectError, Projects } from "./projects.ts";
 import { Training } from "./training.ts";
+import { Chats } from "./chat.ts";
 import { startOfDay, startOfMonth } from "./analytics.ts";
 import { HttpError, RunLauncher } from "./runs.ts";
 import { Memory } from "./memory.ts";
@@ -58,6 +59,7 @@ export type Services = {
   previewTokens?: PreviewTokens;
   projects?: Projects;
   training?: Training;
+  chats?: Chats;
   // Opens a folder in the OS file manager; replaceable in tests.
   openFolder?: (dir: string) => void;
 };
@@ -132,6 +134,7 @@ export function createApp(s: Services) {
   const access = s.access ?? new Access(store, null);
   const triggers = s.triggers ?? new TriggerStore(store);
   const training = s.training ?? new Training(store);
+  const chats = s.chats ?? new Chats(store);
   const loopbackServer = ["127.0.0.1", "localhost", "::1"].includes(config.host);
   const projects = s.projects ?? new Projects(store, config.projectsDir, config.snapshotsDir, config.workspacesDir, loopbackServer);
   const launcher = s.launcher ?? new RunLauncher(config, store, agents, workflows, runner, projects);
@@ -424,6 +427,64 @@ export function createApp(s: Services) {
     if (!store.has(id)) return c.json({ error: "run not found" }, 404);
     try {
       return c.json(readWorkspaceFile(runDir(id), c.req.query("path") ?? ""));
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  // ---- chat with an agent (docs/07 "Chat") ---------------------------------------------------
+
+  const chatUser = (c: Context) => c.get("user")?.name ?? null;
+  const seesAll = (c: Context) => !access.enabled || c.get("user")?.role === "owner";
+  const myChat = (c: Context) => {
+    const conv = chats.get(c.req.param("id") ?? "");
+    return conv && (seesAll(c) || conv.createdBy === chatUser(c)) ? conv : undefined;
+  };
+
+  app.get("/api/conversations", (c) => c.json(chats.list(chatUser(c), seesAll(c))));
+
+  app.post("/api/conversations", async (c) => {
+    const parsed = z.object({ agentId: z.string().max(64).nullable().default(null), title: z.string().max(80).default("") }).safeParse((await body(c)) ?? {});
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    if (parsed.data.agentId && (!agents.get(parsed.data.agentId) || parsed.data.agentId === "ceo")) return c.json({ error: "agent not found" }, 404);
+    return c.json(chats.create(parsed.data.agentId, chatUser(c), parsed.data.title), 201);
+  });
+
+  app.get("/api/conversations/:id", (c) => {
+    const conv = myChat(c);
+    if (!conv) return c.json({ error: "conversation not found" }, 404);
+    return c.json({ ...conv, turns: chats.turns(conv.id) });
+  });
+
+  app.delete("/api/conversations/:id", (c) => {
+    const conv = myChat(c);
+    if (!conv) return c.json({ error: "conversation not found" }, 404);
+    return c.json({ ok: chats.remove(conv.id) });
+  });
+
+  app.post("/api/conversations/:id/messages", async (c) => {
+    const conv = myChat(c);
+    if (!conv) return c.json({ error: "conversation not found" }, 404);
+    const parsed = z
+      .object({ prompt: z.string().trim().min(1).max(20_000), approvalMode: z.enum(["manual", "smart", "auto"]).optional(), language: CreateRunRequest.shape.language, profile: CreateRunRequest.shape.profile })
+      .safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    const user = c.get("user");
+    if (parsed.data.approvalMode === "auto" && user && user.role !== "owner") return c.json({ error: "only the owner can start runs in auto-approve mode" }, 403);
+    const last = chats.lastRun(conv.id);
+    if (last && store.status(last) === "running") return c.json({ error: "wait for the answer to the previous message" }, 409);
+    const agent = conv.agentId ? agents.get(conv.agentId) : undefined;
+    try {
+      const { runId } = launcher.start({
+        ...parsed.data,
+        agentId: conv.agentId ?? undefined,
+        history: chats.history(conv.id, agent ? agent.info.persona || agent.info.name : "Team"),
+        seedFrom: last,
+        createdBy: user?.name,
+        origin: `chat:${conv.id}`,
+      });
+      chats.addTurn(conv.id, runId, parsed.data.prompt);
+      return c.json({ runId }, 201);
     } catch (err) {
       return fail(c, err);
     }

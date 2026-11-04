@@ -157,7 +157,7 @@ function body(run: RunView, runId: string, health: HealthResponse | null, select
 }
 
 // Rate a finished step: the comment becomes a lesson in this agent's own training (docs/03 "Training").
-function Feedback({ runId, stepId, agentId, name }: { runId: string; stepId: string; agentId: string; name: string }) {
+export function Feedback({ runId, stepId, agentId, name, compact = false }: { runId: string; stepId: string; agentId: string; name: string; compact?: boolean }) {
   const [rating, setRating] = useState<"up" | "down" | null>(null);
   const [text, setText] = useState("");
   const [state, setState] = useState<{ text: string; error?: boolean } | null>(null);
@@ -173,6 +173,17 @@ function Feedback({ runId, stepId, agentId, name }: { runId: string; stepId: str
       setState({ text: errorText(err), error: true });
     }
   }
+  if (compact && !rating && !state)
+    return (
+      <div className="feedback-compact">
+        <button className="linkish small" onClick={() => setRating("up")} title={t("train.rate", { name })}>
+          👍
+        </button>
+        <button className="linkish small" onClick={() => setRating("down")} title={t("train.rate", { name })}>
+          👎
+        </button>
+      </div>
+    );
   return (
     <div className="feedback card">
       <div className="small muted">{t("train.rate", { name })}</div>

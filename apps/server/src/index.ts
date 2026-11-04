@@ -27,7 +27,7 @@ const step = (msg: string) => console.log(`[claudestra] ${msg}`);
 const config = loadConfig();
 step(`opening database ${config.dbPath}`);
 const store = new RunStore(config.dbPath);
-const agents = AgentRegistry.fromDir(config.agentsDir);
+const agents = AgentRegistry.fromDir(config.agentsDir, [config.teamAgentsDir]);
 step(`loaded ${agents.infos().length} agents`);
 const skills = new SkillLibrary(config.skillsDir);
 const integrations = new IntegrationRegistry(config.integrationsFile);

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createApp, type RunStarter } from "../src/app.ts";
@@ -237,4 +237,44 @@ test("shared server: a teammate cannot allow shell commands, the owner can", asy
   assert.equal((await req("POST", "/api/runs/r9/approvals/a1", { decision: "approve" }, turan)).status, 403);
   assert.equal((await req("POST", "/api/runs/r9/approvals/a1", { decision: "reject" }, turan)).status, 404, "reject passes the check (no live run here)");
   assert.equal((await req("POST", "/api/runs/r9/approvals/a1", { decision: "approve" }, owner)).status, 404, "owner passes the check");
+});
+
+test("chat: a conversation keeps context and files between messages, and stays private", async () => {
+  const { req, store, cfg } = setup({}, (s) => new Access(s, "owner-secret"));
+  const owner = { authorization: "Bearer owner-secret" };
+  const mk = async (name: string) => ((await (await req("POST", "/api/users", { name, role: "operator", agentId: "researcher" }, owner)).json()) as { token: string }).token;
+  const aysel = { authorization: `Bearer ${await mk("aysel")}` };
+  const elvin = { authorization: `Bearer ${await mk("elvin")}` };
+
+  const conv = (await (await req("POST", "/api/conversations", { agentId: "researcher" }, aysel)).json()) as { id: string };
+  const first = (await (await req("POST", `/api/conversations/${conv.id}/messages`, { prompt: "Eramba framework library" }, aysel)).json()) as { runId: string };
+  assert.ok(first.runId);
+  writeFileSync(path.join(cfg.workspacesDir, first.runId, "report.md"), "# v1\n");
+
+  const second = (await (await req("POST", `/api/conversations/${conv.id}/messages`, { prompt: "add CISO Assistant" }, aysel)).json()) as { runId: string };
+  assert.equal(readFileSync(path.join(cfg.workspacesDir, second.runId, "report.md"), "utf8"), "# v1\n", "files continue");
+  const started = store.events(second.runId).find((e) => e.type === "run.started")!;
+  assert.equal((started.data as { mode: string }).mode, "direct");
+
+  const detail = (await (await req("GET", `/api/conversations/${conv.id}`, undefined, aysel)).json()) as { title: string; turns: { prompt: string; answer: string | null }[] };
+  assert.equal(detail.title, "Eramba framework library");
+  assert.deepEqual(detail.turns.map((t) => t.prompt), ["Eramba framework library", "add CISO Assistant"]);
+  assert.equal(detail.turns[0]!.answer, "Tokyo is the capital");
+
+  assert.equal((await req("GET", `/api/conversations/${conv.id}`, undefined, elvin)).status, 404, "not someone else's chat");
+  assert.equal(((await (await req("GET", "/api/conversations", undefined, elvin)).json()) as unknown[]).length, 0);
+  assert.equal(((await (await req("GET", "/api/conversations", undefined, owner)).json()) as unknown[]).length, 1);
+});
+
+test("chat history: earlier turns become context for the next message", async () => {
+  const { Chats } = await import("../src/chat.ts");
+  const store = new RunStore();
+  const chats = new Chats(store);
+  const conv = chats.create("researcher", "aysel");
+  store.create({ id: "t1", prompt: "q1", source: "claudestra" });
+  store.append("t1", { type: "run.completed", data: { answer: "a1", totalCostUsd: 0, durationMs: 1, numTurns: 1 } });
+  chats.addTurn(conv.id, "t1", "q1");
+  const h = chats.history(conv.id, "Aysel");
+  assert.match(h, /User: q1\nAysel: a1/);
+  assert.equal(chats.lastRun(conv.id), "t1");
 });

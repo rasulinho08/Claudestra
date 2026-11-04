@@ -40,6 +40,17 @@
 
 Selecting an **edge** shows the handoff payload.
 
+## Chat (talk to an agent like a messenger)
+`#/chat` (`ChatPage.tsx`): the team is the contact list (my agent first, then *the whole team*, people's agents,
+helpers), each with a coloured avatar (initials of the person's name). A conversation (`chat.ts`, tables
+`conversations`, `conversation_runs`) is a thread of runs: each message is a direct run for that agent (or a CEO run for
+*the whole team*) that gets the last six turns as context and starts from a copy of the previous turn's files, so
+"now make the header blue" edits what it made before. While it works, a typing bubble shows who is doing what
+("Aysel · searching the web"); approvals appear inline; finished answers render as Markdown with the Results
+bar (Try it, ZIP, GitHub), 👍/👎 training and a link to the full graph. Enter sends, Shift+Enter adds a line.
+API: `GET/POST /api/conversations`, `GET/DELETE /api/conversations/:id`, `POST /api/conversations/:id/messages`.
+A person sees only their own conversations; the owner sees all.
+
 ## HQ (home page, upgrade V4)
 `#/hq` is the landing page (`GET /api/hq`, polled every 3 s): **Needs your OK** (pending tool approvals across all
 running runs with Approve/Reject in place; plan approvals link to the run), **Working now** (running tasks and the

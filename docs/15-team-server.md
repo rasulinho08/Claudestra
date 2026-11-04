@@ -16,6 +16,12 @@ whole team.
 | Own-agent editing | a person may change **their own** agent's name/style (`PUT /api/agents/:id/persona`), skills (`PUT /api/agents/:id/skills`) and training; tools, approvals and the agent file stay owner-only |
 | Agent profiles | the **Agent anketi** form collects each person's work, skills and GitHub skills; Claude turns each answer into an agent |
 
+## People's own agents stay private
+`agents/` (in the repository) holds the shared helper roles. People's own agents live in `team/agents/*.md`, which is
+git-ignored (`TEAM_AGENTS_DIR`), so names, internal tasks and company prompts never reach the public repository.
+They load after `agents/` and are edited in place from the Agents page. Back the folder up yourself.
+Generic skills they use (e.g. `sprint-dashboard`, `grc-research-doc`) are in `skills/` without real data.
+
 ## Safety on a shared server
 - `PUBLIC_URL` must be set when people reach the server from outside; then login is required (the server refuses to
   start without it), the public host name is allowed, and requests through the tunnel/proxy never count as

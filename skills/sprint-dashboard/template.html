@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="az" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{COMPANY}} — sprint hesabatı ({{DATES}})</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --canvas:#EAEAEA;--tile:#FFFFFF;--ink:#252423;--ink-2:#484644;--muted:#605E5C;--line:#E1DFDD;--grid:#EDEBE9;
+  --c1:#01A99C;--c2:#374649;--c3:#E8504C;--c4:#E0B400;--c5:#5F6B6D;--c6:#4AA8D6;--c7:#E67E3C;
+  --ok:#107C10;--sel:#252423;
+  --font:'Segoe UI','Source Sans 3',system-ui,-apple-system,sans-serif;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --canvas:#11100F;--tile:#1F1E1D;--ink:#F3F2F1;--ink-2:#D2D0CE;--muted:#A19F9D;--line:#3B3A39;--grid:#323130;
+  --c1:#2CC8BA;--c2:#9AA9AC;--c3:#FF7A76;--c4:#F2C80F;--c5:#A3ACAE;--c6:#7CC3E6;--c7:#FF9B5C;--ok:#54B054;--sel:#F3F2F1;
+}}
+:root[data-theme="dark"]{
+  --canvas:#11100F;--tile:#1F1E1D;--ink:#F3F2F1;--ink-2:#D2D0CE;--muted:#A19F9D;--line:#3B3A39;--grid:#323130;
+  --c1:#2CC8BA;--c2:#9AA9AC;--c3:#FF7A76;--c4:#F2C80F;--c5:#A3ACAE;--c6:#7CC3E6;--c7:#FF9B5C;--ok:#54B054;--sel:#F3F2F1;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button:focus-visible{outline:2px solid var(--c1);outline-offset:2px}
+.wrap{max-width:1320px;margin:0 auto;padding:16px clamp(10px,2vw,20px) 28px}
+.bar{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;background:var(--tile);padding:14px 18px;margin-bottom:10px}
+.ttl{display:flex;align-items:center;gap:12px}
+.ttl svg{width:30px;height:30px;flex:none}
+.ttl h1{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em}
+.ttl p{margin:0;font-size:13px;color:var(--muted)}
+.slicer{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.slicer .lab{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;margin-right:4px}
+.slicer button{font:inherit;font-size:14px;padding:6px 14px;border:1px solid var(--line);background:var(--tile);color:var(--ink-2);cursor:pointer;border-radius:2px}
+.slicer button[aria-pressed="true"]{background:var(--sel);color:var(--tile);border-color:var(--sel)}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,340px);gap:10px;align-items:start}
+.main{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.side{display:grid;gap:10px}
+.t{background:var(--tile);padding:12px 14px 14px;min-width:0}
+.t h2{margin:0;font-size:15px;font-weight:600;color:var(--ink)}
+.t .s{margin:1px 0 8px;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.kpi{grid-column:span 2;display:flex;flex-direction:column;min-height:118px}
+.kpi .v{font-size:44px;font-weight:300;line-height:1;margin-top:auto;font-variant-numeric:tabular-nums;color:var(--ink)}
+.kpi .v small{font-size:20px;color:var(--muted);margin-left:2px}
+.span2{grid-column:span 2}.span3{grid-column:span 3}.span4{grid-column:span 4}.span6{grid-column:1/-1}
+.cb{position:relative;width:100%}
+.lg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--ink-2);margin-bottom:6px}
+.lg span{display:inline-flex;align-items:center;gap:6px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:50%}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:620px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px;border-bottom:1px solid var(--grid);vertical-align:middle}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.db{display:flex;align-items:center;gap:6px}
+.db i{display:block;height:12px;background:var(--c1)}
+.ok{color:var(--ok);font-weight:600;white-space:nowrap}
+.pl{display:inline-block;font-size:11.5px;font-weight:600;padding:1px 7px;border-radius:2px;color:#fff;white-space:nowrap}
+.board{list-style:none;margin:6px 0 0;padding:0}
+.board li{display:grid;grid-template-columns:14px minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--grid);font-size:14px}
+.board li:first-child{border-top:0}
+.board .p{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.board .pc{color:var(--muted);font-size:12.5px;width:40px;text-align:right;font-variant-numeric:tabular-nums}
+.big{font-size:15px;font-weight:600;margin:4px 0 2px}
+.foot{font-size:12px;color:var(--muted);margin:12px 2px 0;max-width:110ch}
+@media (max-width:1000px){.layout{grid-template-columns:minmax(0,1fr)}.side{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}}
+@media (max-width:700px){.main{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi{grid-column:span 1}.span2,.span3,.span4{grid-column:1/-1}.kpi .v{font-size:36px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <div class="ttl">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 23 L8 11 L13 17 L16 8 L19 17 L24 11 L27 23 Z" stroke="var(--c1)" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="9" r="1.9" fill="var(--c1)"/><circle cx="16" cy="6" r="1.9" fill="var(--c1)"/><circle cx="24" cy="9" r="1.9" fill="var(--c1)"/><path d="M5 26 H27" stroke="var(--c1)" stroke-width="1.8"/></svg>
+      <div><h1>{{COMPANY}} · {{SPRINT}}</h1><p>{{DATES}} · {{PROJECTS}} · ClickUp sprint xalları</p></div>
+    </div>
+    <div class="slicer" role="group" aria-label="Layihə filtri">
+      <span class="lab">Layihə</span>
+      <button type="button" data-p="ALL" aria-pressed="true">Hamısı</button>
+      <button type="button" data-p="GRC" aria-pressed="false">GRC</button>
+      <button type="button" data-p="GEN" aria-pressed="false">General</button>
+      <button type="button" data-p="AI" aria-pressed="false">AI Proxy</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="main">
+      <div class="t kpi"><h2>Xal</h2><div class="s">Tamamlanmış sprint xalı</div><div class="v" id="k1" aria-live="polite">26</div></div>
+      <div class="t kpi"><h2>Tapşırıq sayı</h2><div class="s">Tamamlanmış / planlanmış</div><div class="v" id="k2">12<small>/12</small></div></div>
+      <div class="t kpi"><h2>Sprint icrası</h2><div class="s">Xal üzrə</div><div class="v" id="k3">100<small>%</small></div></div>
+
+      <div class="t span2"><h2>Xal</h2><div class="s">Layihə üzrə</div>
+        <div class="cb" style="height:210px"><canvas id="cProj" role="img" aria-label="Layihə üzrə xal"></canvas></div></div>
+      <div class="t span2"><h2>Tapşırıq sayı</h2><div class="s">Tapşırıq ölçüsü (xal) üzrə</div>
+        <div class="cb" style="height:210px"><canvas id="cSize" role="img" aria-label="Tapşırıq ölçüsü üzrə say"></canvas></div></div>
+      <div class="t span2"><h2>Orta tapşırıq ölçüsü</h2><div class="s">Xal / tapşırıq, layihə üzrə</div>
+        <div class="cb" style="height:210px"><canvas id="cAvg" role="img" aria-label="Layihə üzrə orta tapşırıq ölçüsü"></canvas></div></div>
+
+      <div class="t span3"><h2>Xal</h2><div class="s">İcraçı və layihə üzrə</div>
+        <div class="lg" id="lgPP"></div>
+        <div class="cb" style="height:270px"><canvas id="cPP" role="img" aria-label="İcraçı və layihə üzrə xal"></canvas></div></div>
+      <div class="t span3"><h2>Xal</h2><div class="s">İş növü üzrə</div>
+        <div class="cb" style="height:294px"><canvas id="cType" role="img" aria-label="İş növü üzrə xal"></canvas></div></div>
+
+      <div class="t span6 tbl"><h2>Tapşırıqlar</h2><div class="s">Cari sprintin tapşırıq siyahısı</div>
+        <table><thead><tr><th scope="col">Tapşırıq</th><th scope="col">Layihə</th><th scope="col">İş növü</th><th scope="col">İcraçı</th><th scope="col">Xal</th><th scope="col">Status</th></tr></thead><tbody id="tb"></tbody></table></div>
+    </div>
+
+    <aside class="side">
+      <div class="t"><h2>Komandanın xal payı</h2><div class="s">Hər nəfər topladığı xala görə pay alır</div>
+        <div class="cb" style="height:270px"><canvas id="cTeam" role="img" aria-label="Komandanın xal payı"></canvas></div>
+        <ol class="board" id="board"></ol></div>
+      <div class="t"><h2>Tapşırıq sayı</h2><div class="s">İcraçı üzrə, layihələrə görə</div>
+        <div class="lg" id="lgCnt"></div>
+        <div class="cb" style="height:250px"><canvas id="cCnt" role="img" aria-label="İcraçı üzrə tapşırıq sayı"></canvas></div></div>
+      <div class="t"><h2>Status</h2><div class="s">Tapşırıqların vəziyyəti</div>
+        <div class="cb" style="height:130px"><div id="statL" style="position:absolute;left:0;right:0;bottom:4px;text-align:center;font-size:24px;font-weight:300;font-variant-numeric:tabular-nums" aria-hidden="true"></div><canvas id="cStat" role="img" aria-label="Status: bütün tapşırıqlar tamamlanıb"></canvas></div></div>
+      <div class="t"><h2>Ən böyük tapşırıq</h2><div class="s">Ən yüksək xallı</div>
+        <div class="big" id="bigT"></div><div style="font-size:13px;color:var(--muted)" id="bigM"></div></div>
+    </aside>
+  </div>
+  <p class="foot">{{FOOTNOTE: Mənbə (ClickUp folderləri), birgə tapşırıqların necə bölündüyü, status qeydləri}}</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+// ===== DATA: replace only this block for each sprint (see SKILL.md) =====
+const P=[
+ {id:'A1',n:'Person One',c:'--c1'},{id:'A2',n:'Person Two',c:'--c2'},{id:'A3',n:'Person Three',c:'--c3'},
+ {id:'A4',n:'Person Four',c:'--c4'}];
+const PN=Object.fromEntries(P.map(p=>[p.id,p]));
+const PR={GRC:{n:'GRC',c:'--c1'},GEN:{n:'General',c:'--c2'},AI:{n:'AI Proxy',c:'--c3'}};
+const T=[
+ {p:'GRC',t:'Example research task',a:['A1'],x:5,k:'Araşdırma'},
+ {p:'GRC',t:'Example development task',a:['A2'],x:3,k:'İnkişaf'},
+ {p:'GEN',t:'Example shared content task',a:['A1','A3'],x:2,k:'Kontent və brend'},
+ {p:'GEN',t:'Example meeting',a:['A4'],x:1,k:'Görüş və əlaqələr'},
+ {p:'AI',t:'Example presentation',a:['A4'],x:3,k:'Təqdimat'}
+];
+// ===== END DATA =====
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt=v=>Number.isInteger(v)?String(v):v.toFixed(1);
+const share=(t,id)=>t.a.includes(id)?t.x/t.a.length:0;
+let F='ALL';
+const rows=()=>T.filter(t=>F==='ALL'||t.p===F);
+const projs=()=>F==='ALL'?['GRC','GEN','AI']:[F];
+
+// slice labels plugin for pie/doughnut
+const sliceLabels={id:'sliceLabels',afterDatasetsDraw(ch,args,opts){if(!opts||!opts.on)return;const {ctx}=ch;const ds=ch.data.datasets[0];const tot=ds.data.reduce((a,b)=>a+b,0);ch.getDatasetMeta(0).data.forEach((arc,i)=>{const v=ds.data[i];if(!v||v/tot<0.045)return;const pos=arc.tooltipPosition();ctx.save();ctx.font='600 12px '+getComputedStyle(document.body).fontFamily;ctx.fillStyle=opts.text?opts.text[i]:'#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(opts.fmt(i,v,tot),pos.x,pos.y);ctx.restore();});}};
+const barLabels={id:'barLabels',afterDatasetsDraw(ch,args,opts){if(!opts||!opts.on)return;const {ctx}=ch;const hz=ch.options.indexAxis==='y';const last=ch.data.datasets.length-1;ch.data.datasets.forEach((ds,di)=>{if(opts.totals&&di!==last)return;ch.getDatasetMeta(di).data.forEach((b,i)=>{let v=opts.totals?ch.data.datasets.reduce((s,d)=>s+(d.data[i]||0),0):ds.data[i];if(!v)return;ctx.save();ctx.font='600 12px '+getComputedStyle(document.body).fontFamily;ctx.fillStyle=css('--ink-2');ctx.textAlign=hz?'left':'center';ctx.textBaseline=hz?'middle':'bottom';ctx.fillText(fmt(v)+(opts.suffix||''),hz?b.x+6:b.x,hz?b.y:b.y-4);ctx.restore();});});}};
+Chart.register(sliceLabels,barLabels);
+const textOn=c=>{const h=c.replace('#','');const r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);return (0.299*r+0.587*g+0.114*b)>160?'#252423':'#FFFFFF';};
+
+const C={};
+function axes(hz,max){const grid={color:css('--grid')},tk={color:css('--muted')};const v={beginAtZero:true,grid,ticks:tk,border:{display:false}};if(max)v.suggestedMax=max;const c={grid:{display:false},ticks:{color:css('--ink-2')},border:{color:css('--line')}};return hz?{x:v,y:c}:{x:c,y:v};}
+function build(){
+ Object.values(C).forEach(c=>c.destroy());
+ Chart.defaults.font.family=getComputedStyle(document.body).fontFamily;Chart.defaults.font.size=12;Chart.defaults.color=css('--ink-2');
+ const tip={backgroundColor:css('--ink'),titleColor:css('--tile'),bodyColor:css('--tile'),cornerRadius:2};
+ const base=(o)=>Object.assign({responsive:true,maintainAspectRatio:false,animation:{duration:400}},o);
+ C.proj=new Chart(cProj,{type:'bar',data:{labels:[],datasets:[{data:[],backgroundColor:[],maxBarThickness:46}]},options:base({layout:{padding:{top:18}},plugins:{legend:{display:false},tooltip:Object.assign({callbacks:{label:c=>' '+c.raw+' xal'}},tip),barLabels:{on:true}},scales:axes(false)})});
+ C.size=new Chart(cSize,{type:'bar',data:{labels:['1','2','3','5'],datasets:[{data:[],backgroundColor:css('--c2'),maxBarThickness:40}]},options:base({layout:{padding:{top:18}},plugins:{legend:{display:false},tooltip:Object.assign({callbacks:{title:c=>c[0].label+' xallıq',label:c=>' '+c.raw+' tapşırıq'}},tip),barLabels:{on:true}},scales:Object.assign(axes(false),{})})});
+ C.size.options.scales.y.ticks.stepSize=1;C.size.options.scales.x.title={display:true,text:'Xal',color:css('--muted')};
+ C.avg=new Chart(cAvg,{type:'bar',data:{labels:[],datasets:[{data:[],backgroundColor:[],maxBarThickness:26}]},options:base({indexAxis:'y',layout:{padding:{right:30}},plugins:{legend:{display:false},tooltip:Object.assign({callbacks:{label:c=>' '+fmt(c.raw)+' xal/tapşırıq'}},tip),barLabels:{on:true}},scales:axes(true,3)})});
+ C.pp=new Chart(cPP,{type:'bar',data:{labels:[],datasets:[]},options:base({indexAxis:'y',layout:{padding:{right:30}},plugins:{legend:{display:false},tooltip:Object.assign({filter:i=>i.raw>0,callbacks:{label:c=>' '+c.dataset.label+': '+fmt(c.raw)+' xal'}},tip),barLabels:{on:true,totals:true}},scales:(()=>{const a=axes(true);a.x.stacked=true;a.y.stacked=true;return a;})()})});
+ C.type=new Chart(cType,{type:'bar',data:{labels:[],datasets:[{data:[],backgroundColor:css('--c1'),maxBarThickness:22}]},options:base({indexAxis:'y',layout:{padding:{right:30}},plugins:{legend:{display:false},tooltip:Object.assign({callbacks:{label:c=>' '+c.raw+' xal'}},tip),barLabels:{on:true}},scales:axes(true)})});
+ C.team=new Chart(cTeam,{type:'pie',data:{labels:[],datasets:[{data:[],backgroundColor:[],borderColor:css('--tile'),borderWidth:2}]},options:base({plugins:{legend:{display:false},tooltip:Object.assign({callbacks:{label:c=>{const tot=c.dataset.data.reduce((a,b)=>a+b,0);return ' '+c.label+': '+fmt(c.raw)+' xal ('+Math.round(c.raw/tot*100)+'%)';}}},tip),sliceLabels:{on:true,text:[],fmt:(i,v)=>fmt(v)}}})});
+ C.cnt=new Chart(cCnt,{type:'bar',data:{labels:[],datasets:[]},options:base({indexAxis:'y',layout:{padding:{right:24}},plugins:{legend:{display:false},tooltip:Object.assign({filter:i=>i.raw>0,callbacks:{label:c=>' '+c.dataset.label+': '+c.raw+' tapşırıq'}},tip),barLabels:{on:true,totals:true}},scales:(()=>{const a=axes(true);a.x.stacked=true;a.y.stacked=true;a.x.ticks.stepSize=1;return a;})()})});
+ C.stat=new Chart(cStat,{type:'doughnut',data:{labels:['Tamamlandı','Açıq'],datasets:[{data:[1,0],backgroundColor:[css('--ok'),css('--grid')],borderWidth:0}]},options:base({cutout:'72%',rotation:-90,circumference:180,plugins:{legend:{display:false},tooltip:Object.assign({callbacks:{label:c=>' '+c.label+': '+c.raw+' tapşırıq'}},tip)}})});
+ render();
+}
+function render(){
+ const R=rows();const pts=R.reduce((s,t)=>s+t.x,0);
+ k1.textContent=fmt(pts);k2.innerHTML=R.length+'<small>/'+R.length+'</small>';k3.innerHTML='100<small>%</small>';
+ const pr=projs();
+ C.proj.data.labels=pr.map(p=>PR[p].n);C.proj.data.datasets[0].data=pr.map(p=>T.filter(t=>t.p===p).reduce((s,t)=>s+t.x,0));C.proj.data.datasets[0].backgroundColor=pr.map(p=>css(PR[p].c));C.proj.update();
+ C.size.data.datasets[0].data=[1,2,3,5].map(s=>R.filter(t=>t.x===s).length);C.size.update();
+ C.avg.data.labels=pr.map(p=>PR[p].n);C.avg.data.datasets[0].data=pr.map(p=>{const ts=T.filter(t=>t.p===p);return ts.reduce((s,t)=>s+t.x,0)/ts.length;});C.avg.data.datasets[0].backgroundColor=pr.map(p=>css(PR[p].c));C.avg.update();
+ // people
+ const ppl=P.map(p=>({...p,v:R.reduce((s,t)=>s+share(t,p.id),0)})).filter(p=>p.v>0).sort((a,b)=>b.v-a.v);
+ C.pp.data.labels=ppl.map(p=>p.n);C.pp.data.datasets=pr.map(pj=>({label:PR[pj].n,data:ppl.map(p=>T.filter(t=>t.p===pj).reduce((s,t)=>s+share(t,p.id),0)),backgroundColor:css(PR[pj].c),maxBarThickness:22}));C.pp.update();
+ lgPP.innerHTML=pr.map(p=>'<span><i class="sw" style="background:var('+PR[p].c+')"></i>'+PR[p].n+'</span>').join('');
+ // types
+ const ty={};R.forEach(t=>ty[t.k]=(ty[t.k]||0)+t.x);const tk=Object.keys(ty).sort((a,b)=>ty[b]-ty[a]);
+ C.type.data.labels=tk;C.type.data.datasets[0].data=tk.map(k=>ty[k]);C.type.update();
+ // team pie
+ const cols=ppl.map(p=>css(p.c));
+ C.team.data.labels=ppl.map(p=>p.n);C.team.data.datasets[0].data=ppl.map(p=>p.v);C.team.data.datasets[0].backgroundColor=cols;C.team.options.plugins.sliceLabels.text=cols.map(textOn);C.team.update();
+ board.innerHTML=ppl.map(p=>'<li><i class="sw" style="background:var('+p.c+')"></i><span>'+p.n+'</span><span class="p">'+fmt(p.v)+' xal</span><span class="pc">'+Math.round(p.v/pts*100)+'%</span></li>').join('');
+ const byCnt=P.map(p=>({...p,v:R.filter(t=>t.a.includes(p.id)).length})).filter(p=>p.v>0).sort((a,b)=>b.v-a.v||a.n.localeCompare(b.n));
+ C.cnt.data.labels=byCnt.map(p=>p.n);C.cnt.data.datasets=pr.map(pj=>({label:PR[pj].n,data:byCnt.map(p=>R.filter(t=>t.p===pj&&t.a.includes(p.id)).length),backgroundColor:css(PR[pj].c),maxBarThickness:20}));C.cnt.update();
+ lgCnt.innerHTML=pr.map(p=>'<span><i class="sw" style="background:var('+PR[p].c+')"></i>'+PR[p].n+'</span>').join('');
+ cCnt.setAttribute('aria-label','İcraçı üzrə tapşırıq sayı: '+byCnt.map(p=>p.n+' '+p.v).join(', '));
+ cTeam.setAttribute('aria-label','Komandanın xal payı: '+ppl.map(p=>p.n+' '+fmt(p.v)+' xal').join(', '));
+ cProj.setAttribute('aria-label','Layihə üzrə xal: '+pr.map(p=>PR[p].n+' '+T.filter(t=>t.p===p).reduce((s,t)=>s+t.x,0)).join(', '));
+ // status
+ C.stat.data.datasets[0].data=[R.length,0];C.stat.update();document.getElementById('statL').innerHTML=R.length+'/'+R.length+' <span style="font-size:13px;color:var(--ok);font-weight:600">tamamlandı</span>';
+ // biggest
+ const b=[...R].sort((a,b)=>b.x-a.x)[0];bigT.textContent=b.t;bigM.textContent=b.x+' xal · '+PR[b.p].n+' · '+b.a.map(i=>PN[i].n).join(', ');
+ // table
+ const mx=Math.max(...R.map(t=>t.x));
+ tb.innerHTML=R.map(t=>'<tr><td>'+t.t+'</td><td><span class="pl" style="background:var('+PR[t.p].c+');color:'+textOn(css(PR[t.p].c))+'">'+PR[t.p].n+'</span></td><td>'+t.k+'</td><td>'+t.a.map(i=>PN[i].n).join(', ')+'</td><td class="num"><div class="db"><i style="width:'+(t.x/mx*60)+'px"></i>'+t.x+'</div></td><td class="ok">✓ Tamamlandı</td></tr>').join('');
+}
+document.querySelector('.slicer').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;F=b.dataset.p;document.querySelectorAll('.slicer button').forEach(x=>x.setAttribute('aria-pressed',x===b));render();});
+const cProj=document.getElementById('cProj'),cSize=document.getElementById('cSize'),cAvg=document.getElementById('cAvg'),cPP=document.getElementById('cPP'),cType=document.getElementById('cType'),cTeam=document.getElementById('cTeam'),cCnt=document.getElementById('cCnt'),cStat=document.getElementById('cStat');
+const k1=document.getElementById('k1'),k2=document.getElementById('k2'),k3=document.getElementById('k3'),lgPP=document.getElementById('lgPP'),board=document.getElementById('board'),lgCnt=document.getElementById('lgCnt'),bigT=document.getElementById('bigT'),bigM=document.getElementById('bigM'),tb=document.getElementById('tb');
+if(typeof Chart!=='undefined'){build();try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',build);}catch(e){}new MutationObserver(build).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});}
+</script>
+</body>
+</html>

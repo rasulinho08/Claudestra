@@ -80,6 +80,9 @@ memory with embeddings, Slack/Telegram notifications for approvals.
   engines (`mcp-bridge.ts`, docs/05) with Apify, and the *Lead machine* workflow template.
 - Team server (docs/15): users linked to their own agents, direct tasks (`agentId`, run mode `direct`), own-agent
   editing, `PUBLIC_URL` safety rules, Dockerfile and docker-compose.
+- Chat (`chat.ts`, `ChatPage.tsx`, docs/07 "Chat"): messenger-style conversations with an agent or the whole team,
+  context and files carried between messages; people's agents in the git-ignored `team/agents/`; skills
+  `sprint-dashboard` (the team's dashboard template, example data) and `grc-research-doc`.
 
 ## Open questions
 1. **Primary use case** to optimise first: software building, research reports, or business analysis? (Default assumption: software building.)

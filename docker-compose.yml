@@ -16,3 +16,4 @@ services:
       - ./projects:/app/projects
       - ./agents:/app/agents
       - ./skills:/app/skills
+      - ./team:/app/team

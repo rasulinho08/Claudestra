@@ -1,5 +1,5 @@
 // Loads agent definitions from agents/*.md (YAML frontmatter + system prompt body, docs/03).
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
@@ -59,21 +59,35 @@ export function parseAgent(source: string, file = "agent"): AgentDefinition {
 
 export class AgentRegistry {
   private agents = new Map<string, AgentDefinition>();
+  // Which folder each agent's file lives in (agents/ or the git-ignored team/agents/ for people's own agents).
+  private homes = new Map<string, string>();
+  private dirs: string[];
 
-  constructor(definitions: AgentDefinition[], private dir?: string) {
+  constructor(definitions: AgentDefinition[], private dir?: string, extraDirs: string[] = []) {
+    this.dirs = dir ? [dir, ...extraDirs] : [];
     this.load(definitions);
   }
 
-  static fromDir(dir: string): AgentRegistry {
-    return new AgentRegistry(AgentRegistry.readDir(dir), dir);
+  // agents/ first, then extra folders (team/agents/): personal agents stay out of the public repository.
+  static fromDir(dir: string, extraDirs: string[] = []): AgentRegistry {
+    const reg = new AgentRegistry([], dir, extraDirs.filter((d) => existsSync(d)));
+    reg.reload();
+    return reg;
   }
 
-  private static readDir(dir: string): AgentDefinition[] {
+  private static readDir(dir: string): { def: AgentDefinition; dir: string }[] {
     const files = readdirSync(dir).filter((f) => f.endsWith(".md")).sort();
-    return files.map((f) => parseAgent(readFileSync(path.join(dir, f), "utf8"), f));
+    return files.map((f) => ({ def: parseAgent(readFileSync(path.join(dir, f), "utf8"), f), dir }));
+  }
+
+  private reload() {
+    const all = this.dirs.flatMap((d) => AgentRegistry.readDir(d));
+    this.homes = new Map(all.map((x) => [x.def.info.id, x.dir]));
+    this.load(all.map((x) => x.def));
   }
 
   private load(definitions: AgentDefinition[]) {
+    if (definitions.length === 0 && this.dirs.length > 0) return; // filled by reload()
     const next = new Map<string, AgentDefinition>();
     for (const def of definitions) {
       if (next.has(def.info.id)) throw new Error(`duplicate agent id ${def.info.id}`);
@@ -89,8 +103,9 @@ export class AgentRegistry {
     const def = parseAgent(source, `${id}.md`);
     if (def.info.id !== id) throw new Error(`frontmatter id "${def.info.id}" does not match "${id}"`);
     if (id === "ceo" && def.tools.length > 0) throw new Error("the CEO must not have tools");
-    writeFileSync(path.join(this.dir, `${id}.md`), source.endsWith("\n") ? source : `${source}\n`, "utf8");
-    this.load(AgentRegistry.readDir(this.dir));
+    const home = this.homes.get(id) ?? this.dir;
+    writeFileSync(path.join(home, `${id}.md`), source.endsWith("\n") ? source : `${source}\n`, "utf8");
+    this.reload();
     return def;
   }
 

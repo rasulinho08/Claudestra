@@ -8,7 +8,7 @@ import type { WorkflowStore } from "./workflows.ts";
 import type { StartOptions } from "./orchestrator.ts";
 import { resolveSdkAuth } from "./auth.ts";
 import { startOfDay, startOfMonth } from "./analytics.ts";
-import { mkdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { ProjectError, type Projects } from "./projects.ts";
 
@@ -28,6 +28,9 @@ export type RunRequest = {
   projectId?: string;
   // Straight to one agent ("my agent"), no CEO planning.
   agentId?: string;
+  // Chat (chat.ts): earlier turns of the conversation, and the run whose files this one continues from.
+  history?: string;
+  seedFrom?: string;
   createdBy?: string;
   // Who started it: "user", "trigger:<id>", "eval:<id>".
   origin?: string;
@@ -87,6 +90,16 @@ export class RunLauncher {
     let projectNote = "";
     const project = req.projectId ? this.projects?.get(req.projectId) : undefined;
     if (req.projectId && !project) throw new HttpError(404, "project not found");
+    // A chat turn continues in a copy of the previous turn's files (not when a project supplies them).
+    if (!project && req.seedFrom && /^[A-Za-z0-9-]{1,128}$/.test(req.seedFrom)) {
+      const from = path.join(this.config.workspacesDir, req.seedFrom);
+      if (existsSync(from)) {
+        cpSync(from, path.join(this.config.workspacesDir, runId), {
+          recursive: true,
+          filter: (src) => !path.relative(from, src).split(path.sep).some((seg) => [".claudestra", ".claude", "node_modules", ".git"].includes(seg)),
+        });
+      }
+    }
     if (project && this.projects) {
       const workspace = path.join(this.config.workspacesDir, runId);
       mkdirSync(workspace, { recursive: true });
@@ -117,7 +130,8 @@ export class RunLauncher {
         ...(project ? { project: { id: project.id, name: project.name } } : {}),
       },
     });
-    this.runner.start(runId, { prompt, profile, approvalMode, plan, language: req.language ?? "auto", projectNote }).catch((err: unknown) => {
+    const contextNote = [projectNote, req.history ?? ""].filter(Boolean).join("\n\n");
+    this.runner.start(runId, { prompt, profile, approvalMode, plan, language: req.language ?? "auto", projectNote: contextNote }).catch((err: unknown) => {
       if (this.store.status(runId) === "running") this.store.append(runId, { type: "run.failed", data: { error: err instanceof Error ? err.message : String(err) } });
     });
     return { runId };
