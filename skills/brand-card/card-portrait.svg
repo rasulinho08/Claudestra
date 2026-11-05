@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
+  <!-- Instagram portrait card (4:5). Replace every {{...}}; delete lines you do not need. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="{{BG}}"/>
+      <stop offset="1" stop-color="{{BG_2}}"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1350" fill="url(#bg)"/>
+  <circle cx="930" cy="190" r="260" fill="{{ACCENT}}" opacity="0.14"/>
+  <circle cx="1010" cy="120" r="120" fill="{{ACCENT}}" opacity="0.22"/>
+  <!-- Brand row: put a logo file next to the SVG and use <image href="logo.png" x="90" y="90" height="64"/> instead of the text. -->
+  <text x="90" y="140" font-family="{{FONT}}" font-size="40" font-weight="700" fill="{{TEXT}}" letter-spacing="2">{{BRAND}}</text>
+  <rect x="90" y="300" width="96" height="10" rx="5" fill="{{ACCENT}}"/>
+  <text x="90" y="380" font-family="{{FONT}}" font-size="34" font-weight="600" fill="{{ACCENT}}" letter-spacing="3">{{KICKER}}</text>
+  <!-- Title: at most ~18 characters per line at this size, 2–4 lines. -->
+  <text font-family="{{FONT}}" font-size="88" font-weight="800" fill="{{TEXT}}">
+    <tspan x="90" y="520">{{TITLE_1}}</tspan>
+    <tspan x="90" y="625">{{TITLE_2}}</tspan>
+    <tspan x="90" y="730">{{TITLE_3}}</tspan>
+  </text>
+  <!-- Body: 2–3 short lines, ~38 characters each. -->
+  <text font-family="{{FONT}}" font-size="40" fill="{{TEXT}}" opacity="0.85">
+    <tspan x="90" y="880">{{BODY_1}}</tspan>
+    <tspan x="90" y="940">{{BODY_2}}</tspan>
+    <tspan x="90" y="1000">{{BODY_3}}</tspan>
+  </text>
+  <line x1="90" y1="1170" x2="990" y2="1170" stroke="{{TEXT}}" stroke-opacity="0.2" stroke-width="2"/>
+  <text x="90" y="1240" font-family="{{FONT}}" font-size="34" fill="{{TEXT}}" opacity="0.8">{{FOOTER}}</text>
+  <text x="990" y="1240" font-family="{{FONT}}" font-size="34" font-weight="700" fill="{{ACCENT}}" text-anchor="end">{{CTA}}</text>
+</svg>

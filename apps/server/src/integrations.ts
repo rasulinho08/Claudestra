@@ -1,6 +1,7 @@
 // MCP integrations registry (docs/05 "Integrations"). Reads integrations.json; "${VAR}" values come from
 // the environment so secrets never live in the file. Servers with missing secrets are listed but not attached.
 import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 
@@ -27,21 +28,31 @@ export type IntegrationStatus = {
   usedBy: string[];
 };
 
-const VAR = /\$\{([A-Z0-9_]+)\}/g;
+// "${VAR}" is required (the server is not attached without it); "${VAR:-default}" is optional.
+const VAR = /\$\{([A-Z0-9_]+)(?::-([^}]*))?\}/g;
 
 function resolve(value: string, env: NodeJS.ProcessEnv, missing: Set<string>): string {
-  return value.replace(VAR, (_, name: string) => {
+  return value.replace(VAR, (_, name: string, fallback: string | undefined) => {
     const v = env[name];
-    if (!v) missing.add(name);
-    return v ?? "";
+    if (v) return v;
+    if (fallback !== undefined) return fallback;
+    missing.add(name);
+    return "";
   });
 }
+
+// Values Claudestra fills in itself, so built-in servers (apps/server/mcp/*.mjs) can be started portably:
+// CLAUDESTRA_NODE (this Node binary), CLAUDESTRA_ROOT (the repository) and, per step, CLAUDESTRA_WORKSPACE.
+export type RuntimeVars = { CLAUDESTRA_WORKSPACE?: string };
 
 export class IntegrationRegistry {
   private entries: Record<string, z.infer<typeof ServerEntry>> = {};
   error?: string;
 
+  private builtins: Record<string, string>;
+
   constructor(private file: string, private env: NodeJS.ProcessEnv = process.env) {
+    this.builtins = { CLAUDESTRA_NODE: process.execPath, CLAUDESTRA_ROOT: path.dirname(path.resolve(file)) };
     this.reload();
   }
 
@@ -67,38 +78,40 @@ export class IntegrationRegistry {
   }
 
   // Resolved SDK config for one server, or the env vars it is missing.
-  config(id: string): { config: McpServerConfig } | { missing: string[] } | undefined {
+  // Without a workspace (status listings) the workspace placeholder counts as present.
+  config(id: string, runtime: RuntimeVars = { CLAUDESTRA_WORKSPACE: "." }): { config: McpServerConfig } | { missing: string[] } | undefined {
     const e = this.entries[id];
     if (!e) return undefined;
     const missing = new Set<string>();
+    const env = { ...this.env, ...this.builtins, ...runtime };
     let config: McpServerConfig;
     if (e.type === "stdio") {
       if (!e.command) return { missing: ["command"] };
       config = {
         type: "stdio",
-        command: resolve(e.command, this.env, missing),
-        args: e.args.map((a) => resolve(a, this.env, missing)),
-        env: Object.fromEntries(Object.entries(e.env).map(([k, v]) => [k, resolve(v, this.env, missing)])),
+        command: resolve(e.command, env, missing),
+        args: e.args.map((a) => resolve(a, env, missing)),
+        env: Object.fromEntries(Object.entries(e.env).map(([k, v]) => [k, resolve(v, env, missing)])),
       };
     } else {
       if (!e.url) return { missing: ["url"] };
       config = {
         type: e.type,
-        url: resolve(e.url, this.env, missing),
-        headers: Object.fromEntries(Object.entries(e.headers).map(([k, v]) => [k, resolve(v, this.env, missing)])),
+        url: resolve(e.url, env, missing),
+        headers: Object.fromEntries(Object.entries(e.headers).map(([k, v]) => [k, resolve(v, env, missing)])),
       };
     }
     return missing.size > 0 ? { missing: [...missing] } : { config };
   }
 
   // MCP servers for an agent's "server[:toolGlob]" entries, plus a predicate for allowed tool names.
-  forAgent(entries: string[]): { servers: Record<string, McpServerConfig>; allows: (tool: string) => boolean; unavailable: string[] } {
+  forAgent(entries: string[], runtime?: RuntimeVars): { servers: Record<string, McpServerConfig>; allows: (tool: string) => boolean; unavailable: string[] } {
     const servers: Record<string, McpServerConfig> = {};
     const unavailable: string[] = [];
     const rules: RegExp[] = [];
     for (const entry of entries) {
       const [server, glob = "*"] = entry.split(":");
-      const resolved = this.config(server!);
+      const resolved = this.config(server!, runtime);
       if (!resolved || "missing" in resolved) {
         unavailable.push(server!);
         continue;

@@ -471,7 +471,7 @@ export class Orchestrator {
     ctx.controllers.add(controller);
     if (opts.announce !== false) this.emitStep(ctx, stepId, agent.info.id, { type: "step.ready", data: { task } });
     const skills = this.deps.skills && agent.skills.length > 0 ? this.deps.skills.materialize(agent.skills, ctx.workspace) : [];
-    const mcp = this.deps.integrations && agent.integrations.length > 0 ? this.deps.integrations.forAgent(agent.integrations) : undefined;
+    const mcp = this.deps.integrations && agent.integrations.length > 0 ? this.deps.integrations.forAgent(agent.integrations, { CLAUDESTRA_WORKSPACE: ctx.workspace }) : undefined;
     // Say once per run which apps are not set up (missing key), not on every step.
     const newlyMissing = (mcp?.unavailable ?? []).filter((id) => !ctx.reportedMissing.has(id));
     if (newlyMissing.length > 0) {

@@ -1,0 +1,37 @@
+{
+  "name": "Weekly social media (Instagram, LinkedIn, X)",
+  "description": "The Community Manager picks this week's topics, the Content Maker writes a post per platform with an on-brand image, then publishes them through Postiz. Every post waits for your approval before anything goes out.",
+  "params": [
+    { "key": "prompt", "label": "Company and what to talk about this week", "default": "" },
+    { "key": "week", "label": "Which week", "default": "next week" },
+    { "key": "count", "label": "How many topics", "default": "3" },
+    { "key": "language", "label": "Language of the posts", "default": "Azerbaijani" },
+    { "key": "publish", "label": "After approval: draft, now, or schedule", "default": "draft" }
+  ],
+  "steps": [
+    {
+      "id": "plan",
+      "agent": "community-manager",
+      "task": "Plan {{count}} social media topics for {{week}} for: {{prompt}}. Use the content-calendar skill. Platforms: Instagram, LinkedIn and X. Use only real facts from the brief, the workspace and cited sources. Write social/plan.md.",
+      "dependsOn": [],
+      "successCriteria": "social/plan.md with {{count}} topics, pillars, platforms, hooks, visual ideas and sources",
+      "loopBackTo": ""
+    },
+    {
+      "id": "create",
+      "agent": "content-maker",
+      "task": "For every topic in social/plan.md write posts in {{language}} for Instagram, LinkedIn and X (posts.md per topic folder, each text within the platform limit) and make the images with the brand-card skill: Instagram 1080x1350 and LinkedIn/X 1200x627 SVG cards rendered to PNG with mcp__media__render_png. Do not publish in this step.",
+      "dependsOn": ["plan"],
+      "successCriteria": "a folder per topic with posts.md and PNG cards; no {{ placeholders and no [FACT NEEDED] left",
+      "loopBackTo": ""
+    },
+    {
+      "id": "publish",
+      "agent": "content-maker",
+      "task": "Publish the posts from the topic folders under social/ through Postiz: call mcp__social__list_channels, then one mcp__social__create_post per topic with an entry for each connected Instagram, LinkedIn and X account (its own text and PNG). Use when=\"{{publish}}\" (\"draft\", \"now\", or a date-time; for a schedule spread the topics over {{week}} at 09:30 Baku time). Skip any post that still has [FACT NEEDED]. If social is not set up, write social/to-post.md with the texts and image paths for posting by hand.",
+      "dependsOn": ["create"],
+      "successCriteria": "every post approved and sent to Postiz (or listed in social/to-post.md), with a short report of what went where",
+      "loopBackTo": ""
+    }
+  ]
+}

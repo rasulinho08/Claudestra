@@ -83,6 +83,9 @@ memory with embeddings, Slack/Telegram notifications for approvals.
 - Chat (`chat.ts`, `ChatPage.tsx`, docs/07 "Chat"): messenger-style conversations with an agent or the whole team,
   context and files carried between messages; people's agents in the git-ignored `team/agents/`; skills
   `sprint-dashboard` (the team's dashboard template, example data) and `grc-research-doc`.
+- Social media team (docs/16): Community Manager and Content Maker agents, skills `content-calendar` and `brand-card`
+  (SVG templates), built-in MCP apps `media` (PNG cards, Gemini pictures) and `social` (Postiz publishing with approval),
+  the *Weekly social media* workflow template.
 
 ## Open questions
 1. **Primary use case** to optimise first: software building, research reports, or business analysis? (Default assumption: software building.)

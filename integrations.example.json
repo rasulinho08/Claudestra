@@ -57,5 +57,38 @@
       "fetch-apify-docs",
       "apify-slash-rag-web-browser"
     ]
+  },
+  "media": {
+    "description": "Built-in: render SVG post cards to PNG (free, local) and generate pictures with Gemini (free tier, needs GEMINI_API_KEY; optional).",
+    "type": "stdio",
+    "command": "${CLAUDESTRA_NODE}",
+    "args": [
+      "${CLAUDESTRA_ROOT}/apps/server/mcp/media.mjs"
+    ],
+    "env": {
+      "CLAUDESTRA_WORKSPACE": "${CLAUDESTRA_WORKSPACE}",
+      "GEMINI_API_KEY": "${GEMINI_API_KEY:-}",
+      "GEMINI_IMAGE_MODEL": "${GEMINI_IMAGE_MODEL:-}",
+      "MEDIA_MAX_IMAGES": "${MEDIA_MAX_IMAGES:-6}"
+    },
+    "readTools": [
+      "render_png"
+    ]
+  },
+  "social": {
+    "description": "Built-in: post to Instagram, LinkedIn, X (and more) through Postiz. Every post needs your approval. Key: Postiz → Settings → Public API.",
+    "type": "stdio",
+    "command": "${CLAUDESTRA_NODE}",
+    "args": [
+      "${CLAUDESTRA_ROOT}/apps/server/mcp/social.mjs"
+    ],
+    "env": {
+      "CLAUDESTRA_WORKSPACE": "${CLAUDESTRA_WORKSPACE}",
+      "POSTIZ_API_KEY": "${POSTIZ_API_KEY}",
+      "POSTIZ_URL": "${POSTIZ_URL:-https://api.postiz.com/public/v1}"
+    },
+    "readTools": [
+      "list_channels"
+    ]
   }
 }

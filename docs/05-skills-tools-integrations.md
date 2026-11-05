@@ -75,6 +75,17 @@ Free app included in `integrations.example.json`: **apify** (hosted MCP at mcp.a
 credits: Google Maps, website and social scrapers, a web browser for agents), used by the Researcher and Sales agents;
 running an Actor (`mcp__apify__call-actor`) asks for approval in smart mode. A missing key is reported once per run.
 
+Built-in apps (docs/16), plain-JS stdio servers in `apps/server/mcp/` started with `${CLAUDESTRA_NODE}`:
+- **media**: `render_png` (SVG card → PNG with resvg, system fonts or a workspace `fonts/` folder; images inside the SVG
+  are inlined from the workspace only) and `generate_image` (Gemini image model, optional `GEMINI_API_KEY`, capped by
+  `MEDIA_MAX_IMAGES` per step).
+- **social**: `list_channels` and `create_post` through Postiz (Instagram, LinkedIn, X…; `POSTIZ_API_KEY`). Every
+  `create_post` waits for a person (never auto, `mcp__*__create_*`).
+
+Placeholders in `integrations.json`: `${VAR}` is required (the app shows `missing_secret` without it),
+`${VAR:-default}` is optional. Claudestra fills `${CLAUDESTRA_NODE}`, `${CLAUDESTRA_ROOT}` and, per step,
+`${CLAUDESTRA_WORKSPACE}` (built-in servers confine every file to that folder).
+
 ## Custom tools (in-process)
 Small TS functions exposed as in-process MCP tools (e.g. `emit_artifact`, `ask_user`, `report_progress`).
 Two are mandatory for every agent:

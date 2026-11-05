@@ -29,7 +29,9 @@ export function requestOf(prompt: string): string {
 // Keyword planner standing in for the CEO's judgement.
 export function demoPlan(request: string, cap: number) {
   const r = request.toLocaleLowerCase("az");
-  const wantsCode = has(r, BUILD_VERBS);
+  // Social posts ("post hazırla") are content work, not code.
+  const social = has(r, words("[iı]nstagram|l[iı]nked[iı]n|tw[iı]tter|soc[iı]al|sos[iı]al\\p{L}*|paylaş\\p{L}*"));
+  const wantsCode = has(r, BUILD_VERBS) && !social;
   const isQuestion = /\?\s*$/.test(request.trim()) || has(r, new RegExp(`^(what|who|when|where|why|how|which|nə|nədir|kim|niyə|necə|hansı)(?![\\p{L}\\p{N}_])`, "u"));
   if (isQuestion && !wantsCode && request.length < 160) {
     return { route: "direct", summary: "A short question: the CEO answers directly.", directAnswer: `(demo) This is a simulated answer to: "${request}". With a real AI connected, the CEO would answer here in one cheap call.`, steps: [] };
@@ -41,7 +43,7 @@ export function demoPlan(request: string, cap: number) {
     return id;
   };
   let last: string[] = [];
-  if (has(r, words("research|find|compare|latest|search|sources?|araşdır|tap|müqayisə|axtar")) || !wantsCode) last = [add("researcher", `Research the background for: ${request}`)];
+  if (has(r, words("research|find|compare|latest|search|sources?|araşdır|tap|müqayisə|axtar")) || (!wantsCode && !social)) last = [add("researcher", `Research the background for: ${request}`)];
   if (has(r, words("requirements?|user stor|spec|tələb\\p{L}*"))) last = [add("business-analyst", "Write requirements.md with acceptance criteria.", last)];
   if (has(r, words("design|architecture|plan|dizayn|arxitektura"))) last = [add("architect", "Write design.md with a file-level plan.", last)];
   if (wantsCode) {
@@ -53,10 +55,14 @@ export function demoPlan(request: string, cap: number) {
   }
   if (wantsCode && has(r, words("design|style|css|beautiful|pretty|dizayn|gözəl|stil\\p{L}*"))) last = [add("designer", "Polish the look: layout, colours, accessibility.", last)];
   if (has(r, words("leads?|customers?|clients?|müştəri\\p{L}*|satış\\p{L}*"))) last = [add("sales", "Build a qualified lead list and first messages.", last)];
-  if (has(r, words("market\\p{L}*|landing|slogan|posts?|reklam\\p{L}*"))) last = [add("marketer", "Write the marketing copy.", last)];
+  if (social) {
+    last = [add("community-manager", "Plan the topics in social/plan.md.", last)];
+    last = [add("content-maker", "Write the posts and make the PNG cards.", last)];
+  }
+  if (!social && has(r, words("market\\p{L}*|landing|slogan|posts?|reklam\\p{L}*"))) last = [add("marketer", "Write the marketing copy.", last)];
   if (has(r, words("process\\p{L}*|operations?|proses\\p{L}*|əməliyyat\\p{L}*"))) last = [add("coo", "Write the weekly operating process.", last)];
   if (has(r, words("translat\\p{L}*|tərcümə\\p{L}*|english|ingilis\\p{L}*|rus\\p{L}*"))) last = [add("translator", "Translate the texts.", last)];
-  if (has(r, /(docs?|readme|document|sənəd)/u) || !wantsCode) add("doc-writer", wantsCode ? "Write a README for the result." : "Write report.md from the research.", last);
+  if (has(r, /(docs?|readme|document|sənəd)/u) || (!wantsCode && !social)) add("doc-writer", wantsCode ? "Write a README for the result." : "Write report.md from the research.", last);
   return { route: steps.length === 1 ? "single_agent" : "team", summary: `Demo plan with ${steps.length} step(s) chosen from keywords in the request.`, directAnswer: "", steps: steps.slice(0, cap) };
 }
 
@@ -112,6 +118,13 @@ function toolsFor(req: SessionRequest, request: string): Tool[] {
       return [file("style.css", ":root { --accent: #f59e0b; --bg: #fff; }\n/* (demo) styles */\nbody { font-family: system-ui, sans-serif; }\n")];
     case "translator":
       return [file("README.en.md", `# (demo) English version\n\n${request.slice(0, 80)}\n`)];
+    case "community-manager":
+      return [{ tool: "mcp__social__list_channels", input: {}, output: "(demo) instagram, linkedin-page, x" }, file("social/plan.md", "# (demo) Social plan\n\n| # | Pillar | Topic | Platforms |\n|---|---|---|---|\n| 1 | Expertise | … | Instagram, LinkedIn, X |\n")];
+    case "content-maker":
+      return [
+        file("social/demo-topic/posts.md", "# (demo) Posts\n\n## Instagram\n…\n\n## LinkedIn\n…\n\n## X\n…\n"),
+        { tool: "mcp__media__render_png", input: { svg_file: "social/demo-topic/card.svg", png_file: "social/demo-topic/card.png" }, output: "(demo) PNG written" },
+      ];
     case "marketer":
       return [file("marketing/copy.md", `# (demo) Landing copy\n\n## Headline options\n1. …\n2. …\n3. …\n`)];
     case "data-analyst":
