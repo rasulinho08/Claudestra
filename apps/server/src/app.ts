@@ -26,6 +26,7 @@ import { Training } from "./training.ts";
 import { Chats } from "./chat.ts";
 import { AgentBudgets } from "./budgets.ts";
 import { MAX_FILES, UploadError, Uploads } from "./uploads.ts";
+import { AutomationInput, Automations } from "./automations.ts";
 import { MissionInput, MissionRunner, Missions, missionFile } from "./missions.ts";
 import { startOfDay, startOfMonth } from "./analytics.ts";
 import { HttpError, RunLauncher } from "./runs.ts";
@@ -929,6 +930,27 @@ export function createApp(s: Services) {
   app.delete("/api/workflows/:id", (c) => c.json({ ok: workflows.delete(c.req.param("id")) }));
 
   // ---- triggers ----------------------------------------------------------------------------
+
+  // Automations (docs/20): ready-made scheduled jobs, one switch each.
+  const automations = new Automations(workflows, triggers, templatesDir, (id) => Boolean(agents.get(id)) && id !== "ceo");
+  app.get("/api/automations", (c) => c.json(automations.list()));
+  app.post("/api/automations/:id", async (c) => {
+    const parsed = AutomationInput.extend({ title: z.string().max(120).default("") }).safeParse((await body(c)) ?? {});
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    try {
+      return c.json(automations.enable(c.req.param("id"), parsed.data, parsed.data.title || c.req.param("id")));
+    } catch (err) {
+      return c.json({ error: message(err) }, 400);
+    }
+  });
+  app.delete("/api/automations/:id", (c) => c.json({ ok: automations.disable(c.req.param("id")) }));
+  app.post("/api/automations/:id/run", (c) => {
+    const a = automations.list().find((x) => x.id === c.req.param("id"));
+    const t = a?.triggerId ? triggers.get(a.triggerId) : undefined;
+    if (!t) return c.json({ error: "turn the automation on first" }, 409);
+    const runId = runTrigger(triggers, fire, t, t.params);
+    return runId ? c.json({ runId }, 201) : c.json({ error: triggers.get(t.id)?.lastError ?? "could not start" }, 409);
+  });
 
   const fire: Fire = (t, params) =>
     launcher.start({ prompt: params.prompt ?? "", workflowId: t.workflowId, params, profile: t.profile, approvalMode: t.approvalMode, origin: `trigger:${t.id}`, createdBy: t.name || "trigger" }).runId;

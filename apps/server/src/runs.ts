@@ -12,6 +12,7 @@ import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { ProjectError, type Projects } from "./projects.ts";
 import { UploadError, Uploads, attachmentNote } from "./uploads.ts";
+import { contextParams } from "./automations.ts";
 
 export class HttpError extends Error {
   constructor(public status: 400 | 403 | 404 | 409 | 429, message: string) {
@@ -71,7 +72,8 @@ export class RunLauncher {
       const wf = this.workflows.get(req.workflowId);
       if (!wf) throw new HttpError(404, "workflow not found");
       try {
-        ({ prompt, plan } = this.workflows.instantiate(wf, { prompt, ...(req.params ?? {}) }));
+        // {{today}} and {{recent_work}} are always available to workflows (automations.ts).
+        ({ prompt, plan } = this.workflows.instantiate(wf, { ...contextParams(this.store), prompt, ...(req.params ?? {}) }));
       } catch (err) {
         throw new HttpError(400, err instanceof Error ? err.message : String(err));
       }

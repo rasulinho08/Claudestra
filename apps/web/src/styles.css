@@ -569,3 +569,28 @@ input:not([type=range]):not([type=file]) { background: var(--bg); color: var(--t
 .attach-btn.has { border-color: var(--accent); }
 .attached { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
 .attached-chip { max-width: 240px; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+
+/* Automations */
+.auto-page header h2 { margin: 0; }
+.auto-page header p { margin: 4px 0 0; }
+.auto-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+.auto-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.auto-card.on { border-color: var(--ok); }
+.auto-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; }
+.auto-head h3 { margin: 0; font-size: 15px; }
+.auto-head p { margin: 2px 0 0; }
+.auto-icon { font-size: 26px; line-height: 1; }
+.auto-card .field { margin: 0; }
+.auto-card input[type="time"] { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 3px 8px; }
+.auto-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+.auto-foot .row-gap { flex-wrap: wrap; }
+.auto-foot .hq-new { padding: 5px 14px; }
+.switch { position: relative; display: inline-block; width: 42px; height: 24px; flex: none; cursor: pointer; }
+.switch input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch span { position: absolute; inset: 0; background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; transition: background .15s; pointer-events: none; }
+.switch span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+.switch input:checked + span { background: color-mix(in srgb, var(--ok) 30%, transparent); border-color: var(--ok); }
+.switch input:checked + span::after { transform: translateX(18px); background: var(--ok); }
+.switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch input:disabled + span { opacity: .5; }
+@media (prefers-reduced-motion: reduce) { .switch span, .switch span::after { transition: none; } }

@@ -141,6 +141,8 @@ export class TelegramBot {
   private watching = new Map<string, string>();
   private announced = new Set<string>();
   private missionStatus = new Map<string, string>();
+  // Scheduled runs (automations and other triggers) already reported.
+  private reported = new Set<string>();
   private primed = false;
 
   private t: (typeof TEXT)["en"];
@@ -315,6 +317,16 @@ export class TelegramBot {
       const link = `${this.deps.appUrl}/#/runs?run=${runId}`;
       if (completed) await this.send(chat, `${this.t.done}\n\n${clip((completed.data as { answer: string }).answer, 3000)}\n\n${link}`);
       else await this.send(chat, `${status === "cancelled" ? this.t.runCancelled : `${this.t.failed}: ${failed ? (failed.data as { error: string }).error.slice(0, 300) : ""}`}\n${link}`);
+    }
+    // Scheduled work (automations, docs/20): its result goes to every allowed chat.
+    for (const r of store.list(60)) {
+      if (!(r.origin ?? "").startsWith("trigger:") || r.status === "running" || this.reported.has(r.id)) continue;
+      this.reported.add(r.id);
+      if (!this.primed) continue;
+      const done = store.events(r.id).find((e) => e.type === "run.completed");
+      const link = `${this.deps.appUrl}/#/runs?run=${r.id}`;
+      const title = `🗓 ${r.createdBy ?? r.prompt.slice(0, 60)}`;
+      for (const chat of this.deps.allowedChats) await this.send(chat, done ? `${title}\n\n${clip((done.data as { answer: string }).answer, 3000)}\n\n${link}` : `${title}\n${this.t.failed}\n${link}`);
     }
     // Approvals: every allowed chat is an owner, so each one gets the buttons.
     const pending = this.pending();

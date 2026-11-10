@@ -1,0 +1,20 @@
+{
+  "name": "Morning briefing",
+  "description": "Every morning: what the AI team did yesterday, what is due in ClickUp, and what waits for you. Short enough to read on a phone.",
+  "prompt": "Morning briefing for {{today}}",
+  "params": [
+    { "key": "language", "label": "Language", "default": "Azerbaijani" },
+    { "key": "today", "label": "Date (filled in automatically)", "default": "today" },
+    { "key": "recent_work", "label": "Recent work (filled in automatically)", "default": "No information." }
+  ],
+  "steps": [
+    {
+      "id": "brief",
+      "agent": "project-manager",
+      "task": "Prepare the morning briefing for {{today}} in {{language}}.\n\n1. If you have the ClickUp tools, call mcp__clickup__get_workspace, then mcp__clickup__list_tasks for the lists of the current sprint. Note: overdue tasks, tasks due in the next 3 days, tasks without an assignee or without points. If ClickUp is not available, skip this part and say so in one line.\n2. This is what the AI team did in the last 24 hours:\n{{recent_work}}\n\nWrite brief/{{today}}.md with three short sections: Yesterday (what was done), Today (what is due or should start), Attention (risks, blocked items, approvals waiting). At most 25 lines, plain sentences, real names and numbers only. Do not invent tasks.",
+      "dependsOn": [],
+      "successCriteria": "brief/{{today}}.md with the three sections, at most 25 lines",
+      "loopBackTo": ""
+    }
+  ]
+}

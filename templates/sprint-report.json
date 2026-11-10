@@ -1,0 +1,20 @@
+{
+  "name": "Weekly sprint report",
+  "description": "Every week: reads the sprint from ClickUp, builds the team's sprint dashboard page and a short summary of points per project and person.",
+  "prompt": "Sprint report for the week of {{today}}",
+  "params": [
+    { "key": "sprint_hint", "label": "Words in the sprint folder or list names", "default": "Sprint" },
+    { "key": "language", "label": "Language", "default": "Azerbaijani" },
+    { "key": "today", "label": "Date (filled in automatically)", "default": "today" }
+  ],
+  "steps": [
+    {
+      "id": "report",
+      "agent": "project-manager",
+      "task": "Prepare the sprint report as of {{today}} in {{language}}.\n\n1. Call mcp__clickup__get_workspace and find the current sprint's lists (folder or list names containing: {{sprint_hint}}; one list per project folder). Call mcp__clickup__list_tasks for each of them. If the ClickUp tools are not available, stop and say that CLICKUP_TOKEN must be set.\n2. Build the dashboard with the sprint-dashboard skill from these tasks (dashboards/sprint-{{today}}.html). Tasks that are not done stay not done: say how many in the footnote.\n3. Write dashboards/summary-{{today}}.md: total and completed points, points per project and per person, tasks not finished, tasks without points or assignee, and three observations for the next sprint.\nUse only what ClickUp returned; never guess points or people.",
+      "dependsOn": [],
+      "successCriteria": "dashboards/sprint-{{today}}.html and dashboards/summary-{{today}}.md built from ClickUp data",
+      "loopBackTo": ""
+    }
+  ]
+}

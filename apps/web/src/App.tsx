@@ -17,12 +17,13 @@ import { ChatPage } from "./pages/ChatPage.tsx";
 import { ProjectsPage } from "./pages/ProjectsPage.tsx";
 import { OfficePage } from "./pages/OfficePage.tsx";
 import { MissionsPage } from "./pages/MissionsPage.tsx";
+import { AutomationsPage } from "./pages/AutomationsPage.tsx";
 import { api } from "./api.ts";
 import { lang, setLang, t, type Key } from "./i18n.ts";
 import { notifyOn, notifySupported, toggleNotify, useNotifier } from "./notify.ts";
 
 // The pages people use every day are always visible; setup and admin pages sit under "More".
-const NAV = ["hq", "office", "chat", "missions", "runs", "projects"] as const;
+const NAV = ["hq", "office", "chat", "missions", "automations", "runs", "projects"] as const;
 const MORE = ["workflows", "agents", "skills", "apps", "memory", "evals", "costs", "users"] as const;
 
 export function App() {
@@ -118,6 +119,8 @@ export function App() {
           <OfficePage health={health} session={session} />
         ) : route.page === "missions" ? (
           <MissionsPage key={route.params.get("id") ?? ""} health={health} session={session} initial={route.params.get("id")} />
+        ) : route.page === "automations" ? (
+          <AutomationsPage health={health} />
         ) : route.page === "chat" ? (
           <ChatPage key={route.params.get("agent") ?? ""} health={health} session={session} initialAgent={route.params.get("agent")} />
         ) : route.page === "projects" ? (

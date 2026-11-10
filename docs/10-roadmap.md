@@ -91,6 +91,8 @@ memory with embeddings, Slack/Telegram notifications for approvals.
 - Telegram bot and per-agent monthly budgets (docs/18): `telegram.ts`, `budgets.ts`.
 - Attachments, ClickUp and meetings (docs/19): `uploads.ts` (files into `inputs/`), built-in `clickup` MCP app,
   agents gathering in the meeting room while the CEO reviews.
+- Automations (docs/20): presets (morning briefing, weekly sprint report, market watch, weekly social media) that
+  create a workflow and a schedule with one switch; `{{today}}` and `{{recent_work}}` for workflows; results to Telegram.
 
 ## Open questions
 1. **Primary use case** to optimise first: software building, research reports, or business analysis? (Default assumption: software building.)

@@ -1,0 +1,22 @@
+{
+  "name": "Market and competitor watch",
+  "description": "Every day: news about your topics and what your competitors announced, with dates and links. Says plainly when nothing new happened.",
+  "prompt": "Market watch for {{today}}: {{topics}}",
+  "params": [
+    { "key": "topics", "label": "Topics to follow", "default": "GRC software, AI governance, AI gateway and AI proxy products, cybersecurity regulation" },
+    { "key": "competitors", "label": "Companies or products to watch", "default": "Eramba, CISO Assistant, Vanta, Drata, OneTrust" },
+    { "key": "days", "label": "Look back how many days", "default": "2" },
+    { "key": "language", "label": "Language", "default": "Azerbaijani" },
+    { "key": "today", "label": "Date (filled in automatically)", "default": "today" }
+  ],
+  "steps": [
+    {
+      "id": "watch",
+      "agent": "researcher",
+      "task": "Today is {{today}}. Find what is new in the last {{days}} day(s).\n\nTopics: {{topics}}\nCompetitors: {{competitors}}\n\nSearch the web for each topic and each competitor (news, release notes, blog, pricing changes, funding, regulation). Keep an item only if you can see its publication date and it falls inside the window; drop undated or older items. For each item write: date, one sentence on what happened, one sentence on why it matters to us, and the URL. Group by Topics and Competitors. If nothing new was found for a group, write that plainly instead of filling it with old news.\n\nWrite watch/{{today}}.md in {{language}}, at most 12 items, the most important first.",
+      "dependsOn": [],
+      "successCriteria": "watch/{{today}}.md with dated, sourced items from the last {{days}} day(s), or a plain statement that nothing is new",
+      "loopBackTo": ""
+    }
+  ]
+}
