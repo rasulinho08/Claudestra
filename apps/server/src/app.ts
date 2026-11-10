@@ -24,6 +24,7 @@ import type { PreviewTokens } from "./preview.ts";
 import { ProjectError, Projects } from "./projects.ts";
 import { Training } from "./training.ts";
 import { Chats } from "./chat.ts";
+import { AgentBudgets } from "./budgets.ts";
 import { MissionInput, MissionRunner, Missions, missionFile } from "./missions.ts";
 import { startOfDay, startOfMonth } from "./analytics.ts";
 import { HttpError, RunLauncher } from "./runs.ts";
@@ -63,6 +64,7 @@ export type Services = {
   chats?: Chats;
   missions?: Missions;
   missionRunner?: MissionRunner;
+  budgets?: AgentBudgets;
   // Opens a folder in the OS file manager; replaceable in tests.
   openFolder?: (dir: string) => void;
 };
@@ -142,6 +144,7 @@ export function createApp(s: Services) {
   const projects = s.projects ?? new Projects(store, config.projectsDir, config.snapshotsDir, config.workspacesDir, loopbackServer);
   const launcher = s.launcher ?? new RunLauncher(config, store, agents, workflows, runner, projects);
   const evals = s.evals ?? new Evals(path.join(config.agentsDir, "../evals"), store, launcher, config.workspacesDir);
+  const budgets = s.budgets ?? new AgentBudgets(store);
   const missions = s.missions ?? new Missions(store);
   const missionRunner = s.missionRunner ?? new MissionRunner({ missions, store, workspacesDir: config.workspacesDir, start: (req) => launcher.start(req) });
   const templatesDir = s.templatesDir ?? path.join(config.agentsDir, "../templates");
@@ -692,14 +695,14 @@ export function createApp(s: Services) {
       spend: { today: store.spentSince(startOfDay()), month: store.spentSince(startOfMonth()), dailyCap: config.dailyBudgetUsd, monthlyCap: config.monthlyBudgetUsd },
       projects: projects.list().slice(0, 5),
       missions: missions.list(chatUser(c), seesAll(c)).filter((m) => m.status === "active" || m.status === "paused").slice(0, 6),
-      team: agents.all().map((a) => ({ ...a.info, skills: a.skills.length, busy: busy.get(a.info.id) ?? null })),
+      team: agents.all().map((a) => ({ ...a.info, skills: a.skills.length, busy: busy.get(a.info.id) ?? null, overBudget: budgets.status(a.info.id).over })),
     });
   });
 
   // ---- agents, skills, integrations -------------------------------------------------------
 
   app.get("/api/agents", (c) =>
-    c.json(agents.all().map((a) => ({ ...a.info, style: a.style ?? "", trained: training.counts()[a.info.id] ?? 0, tools: a.tools, skills: a.skills, integrations: a.integrations, requiresApproval: a.requiresApproval, limits: a.limits, source: a.source }))),
+    c.json(agents.all().map((a) => ({ ...a.info, style: a.style ?? "", trained: training.counts()[a.info.id] ?? 0, budget: budgets.status(a.info.id), tools: a.tools, skills: a.skills, integrations: a.integrations, requiresApproval: a.requiresApproval, limits: a.limits, source: a.source }))),
   );
 
   app.put("/api/agents/:id", async (c) => {
@@ -724,6 +727,16 @@ export function createApp(s: Services) {
     } catch (err) {
       return fail(c, err);
     }
+  });
+
+  // Monthly spending cap for one agent (owner only; 0 or null clears it).
+  app.put("/api/agents/:id/budget", async (c) => {
+    const parsed = z.object({ monthlyUsd: z.number().min(0).max(100_000).nullable() }).safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    const id = c.req.param("id");
+    if (!agents.get(id) || id === "ceo") return c.json({ error: "agent not found" }, 404);
+    budgets.set(id, parsed.data.monthlyUsd);
+    return c.json(budgets.status(id));
   });
 
   // Pick the skills of one agent (the agent's owner may do this for their own agent).

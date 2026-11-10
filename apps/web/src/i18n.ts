@@ -3,6 +3,11 @@
 export type Lang = "en" | "az";
 
 const en = {
+  "agents.budget": "Monthly budget",
+  "agents.budgetHelp": "The most this agent may spend in a calendar month. At the limit it stops taking work until the 1st or until you raise it. Leave empty for no limit.",
+  "agents.budgetSpent": "spent this month: ${n}",
+  "agents.budgetOver": "budget used up",
+  "agents.budgetStopped": "This agent has reached its monthly budget and will not take new work.",
   "notify.approval": "An agent needs your approval",
   "notify.missionDone": "Mission finished",
   "notify.missionFailed": "A mission needs attention",
@@ -448,6 +453,11 @@ const en = {
 export type Key = keyof typeof en;
 
 const az: Record<Key, string> = {
+  "agents.budget": "Aylıq büdcə",
+  "agents.budgetHelp": "Bu agentin bir təqvim ayında xərcləyə biləcəyi ən çox məbləğ. Limitə çatanda ayın 1-nə qədər və ya siz limiti artırana qədər iş götürmür. Limit istəmirsinizsə, boş saxlayın.",
+  "agents.budgetSpent": "bu ay xərclənib: ${n}",
+  "agents.budgetOver": "büdcə bitib",
+  "agents.budgetStopped": "Bu agent aylıq büdcəsinə çatıb və yeni iş götürməyəcək.",
   "notify.approval": "Agent sizin təsdiqinizi gözləyir",
   "notify.missionDone": "Missiya bitdi",
   "notify.missionFailed": "Missiyaya diqqət lazımdır",

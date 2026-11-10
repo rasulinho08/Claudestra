@@ -8,6 +8,7 @@ type Agent = {
   id: string; name: string; persona?: string; style: string; trained: number; description: string; color: string; icon: string; modelClass: string;
   tools: string[]; skills: string[]; integrations: string[]; requiresApproval: string[];
   limits: { maxTurns: number; maxBudgetUsd: number }; source: string;
+  budget?: { monthlyUsd: number | null; spentUsd: number; over: boolean };
 };
 type TrainingItem = { id: string; kind: "instruction" | "lesson"; rating: "up" | "down" | null; text: string; runId: string | null; createdAt: string };
 
@@ -98,6 +99,7 @@ export function AgentsPage({ session }: { session?: SessionInfo | null }) {
             </div>
             <div className="small muted">{a.description}</div>
             <div className="tags">
+              {a.budget?.over && <span className="tag tag-warn">💰 {t("agents.budgetOver")}</span>}
               {a.trained > 0 && <span className="tag tag-train">🎓 {t("agents.trained", { n: a.trained })}</span>}
               {a.skills.slice(0, 4).map((s) => (
                 <span key={s} className="tag tag-skill">
@@ -134,7 +136,7 @@ export function AgentsPage({ session }: { session?: SessionInfo | null }) {
               !isOwner && current.id !== myAgent ? (
                 <p className="muted">{t("agents.onlyOwn")}</p>
               ) : (
-                <Profile key={current.id} agent={current} onSaved={load} />
+                <Profile key={current.id} agent={current} onSaved={load} isOwner={isOwner} />
               )
             ) : (
               <>
@@ -156,7 +158,7 @@ export function AgentsPage({ session }: { session?: SessionInfo | null }) {
   );
 }
 
-function Profile({ agent, onSaved }: { agent: Agent; onSaved: () => void }) {
+function Profile({ agent, onSaved, isOwner }: { agent: Agent; onSaved: () => void; isOwner: boolean }) {
   const [persona, setPersona] = useState(agent.persona ?? "");
   const [style, setStyle] = useState(agent.style ?? "");
   const [items, setItems] = useState<TrainingItem[]>([]);
@@ -249,6 +251,8 @@ function Profile({ agent, onSaved }: { agent: Agent; onSaved: () => void }) {
         {msg && <span className={`small ${msg.error ? "error" : "muted"}`}>{msg.text}</span>}
       </div>
 
+      {isOwner && agent.id !== "ceo" && <BudgetBox agent={agent} onSaved={onSaved} />}
+
       <h4>{t("agents.instructions")}</h4>
       <p className="small muted">{t("agents.instructionsHelp")}</p>
       <div className="train-add">
@@ -304,6 +308,46 @@ function Profile({ agent, onSaved }: { agent: Agent; onSaved: () => void }) {
           <pre className="small">{prompt}</pre>
         </details>
       )}
+    </div>
+  );
+}
+
+// Monthly spending cap for this agent (owner only). Empty or 0 means no cap.
+function BudgetBox({ agent, onSaved }: { agent: Agent; onSaved: () => void }) {
+  const b = agent.budget ?? { monthlyUsd: null, spentUsd: 0, over: false };
+  const [value, setValue] = useState(b.monthlyUsd === null ? "" : String(b.monthlyUsd));
+  const [msg, setMsg] = useState<string | null>(null);
+  async function save() {
+    const n = Number(value.replace(",", "."));
+    try {
+      await api(`/api/agents/${agent.id}/budget`, { method: "PUT", body: { monthlyUsd: value.trim() && n > 0 ? n : null } });
+      setMsg(t("agents.saved"));
+      onSaved();
+    } catch (err) {
+      setMsg(errorText(err));
+    }
+  }
+  const share = b.monthlyUsd ? Math.min(1, b.spentUsd / b.monthlyUsd) : 0;
+  return (
+    <div className={`budget-box ${b.over ? "over" : ""}`}>
+      <h4>💰 {t("agents.budget")}</h4>
+      <p className="small muted">{t("agents.budgetHelp")}</p>
+      <div className="row-gap">
+        <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="$" aria-label={t("agents.budget")} style={{ width: 110 }} />
+        <button className="ghost" onClick={() => void save()}>
+          {t("skills.save")}
+        </button>
+        <span className="small muted">
+          {t("agents.budgetSpent", { n: b.spentUsd.toFixed(2) })}
+          {msg ? ` · ${msg}` : ""}
+        </span>
+      </div>
+      {b.monthlyUsd !== null && (
+        <div className="mission-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(share * 100)} aria-label={t("agents.budget")}>
+          <span style={{ width: `${share * 100}%`, background: b.over ? "var(--fail)" : undefined }} />
+        </div>
+      )}
+      {b.over && <div className="error small">{t("agents.budgetStopped")}</div>}
     </div>
   );
 }

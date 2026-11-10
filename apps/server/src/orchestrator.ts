@@ -24,6 +24,7 @@ import { runAgentSession, type Authorization, type SessionRunner } from "./sessi
 import { evaluate } from "./approvals.ts";
 import type { SkillLibrary } from "./skills.ts";
 import type { IntegrationRegistry } from "./integrations.ts";
+import type { AgentBudgets } from "./budgets.ts";
 import type { Memory } from "./memory.ts";
 import { trainedPrompt, type Training } from "./training.ts";
 import type { SessionOutcome } from "./sdk-mapper.ts";
@@ -101,6 +102,7 @@ export type OrchestratorDeps = {
   integrations?: IntegrationRegistry;
   memory?: Memory;
   training?: Training;
+  budgets?: AgentBudgets;
 };
 
 export class Orchestrator {
@@ -470,6 +472,13 @@ export class Orchestrator {
     const controller = new AbortController();
     ctx.controllers.add(controller);
     if (opts.announce !== false) this.emitStep(ctx, stepId, agent.info.id, { type: "step.ready", data: { task } });
+    // Per-agent monthly budget (docs/18): refuse before any spend. The CEO is exempt, or nothing could be planned.
+    const refusal = agent.info.id === "ceo" ? null : (this.deps.budgets?.refusal(agent.info.id, agent.info.persona || agent.info.name) ?? null);
+    if (refusal) {
+      ctx.controllers.delete(controller);
+      this.emitStep(ctx, stepId, agent.info.id, { type: "step.failed", data: { error: refusal } });
+      return { ok: false, text: "", costUsd: null, durationMs: 0, numTurns: 0, error: refusal };
+    }
     const skills = this.deps.skills && agent.skills.length > 0 ? this.deps.skills.materialize(agent.skills, ctx.workspace) : [];
     const mcp = this.deps.integrations && agent.integrations.length > 0 ? this.deps.integrations.forAgent(agent.integrations, { CLAUDESTRA_WORKSPACE: ctx.workspace }) : undefined;
     // Say once per run which apps are not set up (missing key), not on every step.

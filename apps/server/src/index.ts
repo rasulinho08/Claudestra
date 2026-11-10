@@ -16,6 +16,8 @@ import { Access } from "./access.ts";
 import { RunLauncher } from "./runs.ts";
 import { Scheduler, TriggerStore } from "./triggers.ts";
 import { MissionRunner, Missions } from "./missions.ts";
+import { TelegramBot } from "./telegram.ts";
+import { AgentBudgets } from "./budgets.ts";
 import { Evals } from "./evals.ts";
 import { demoSession } from "./demo.ts";
 import { geminiSession } from "./gemini.ts";
@@ -38,7 +40,8 @@ const access = new Access(store, config.authToken);
 const triggers = new TriggerStore(store);
 const interrupted = store.failInterrupted();
 const training = new Training(store);
-const runner = new Orchestrator(config, store, agents, { skills, integrations, memory, training, runSession: config.authMode === "demo" ? demoSession : config.authMode === "gemini" ? geminiSession : config.authMode === "meta" || config.authMode === "openai_compat" ? compatSession : undefined });
+const budgets = new AgentBudgets(store);
+const runner = new Orchestrator(config, store, agents, { budgets, skills, integrations, memory, training, runSession: config.authMode === "demo" ? demoSession : config.authMode === "gemini" ? geminiSession : config.authMode === "meta" || config.authMode === "openai_compat" ? compatSession : undefined });
 const projects = new Projects(store, config.projectsDir, config.snapshotsDir, config.workspacesDir, ["127.0.0.1", "localhost", "::1"].includes(config.host));
 const launcher = new RunLauncher(config, store, agents, workflows, runner, projects);
 const evals = new Evals(config.evalsDir, store, launcher, config.workspacesDir);
@@ -71,12 +74,28 @@ if (config.previewPort) {
 // Missions (docs/17): the heartbeat that keeps long-running work going in the background.
 const missions = new Missions(store);
 const missionRunner = new MissionRunner({ missions, store, workspacesDir: config.workspacesDir, start: (req) => launcher.start(req) });
-const app = createApp({ missions, missionRunner, previewRunning: () => previewRunning, previewTokens, projects, training, config, store, agents, runner, skills, integrations, workflows, memory, access, triggers, evals, launcher, templatesDir: config.templatesDir, hooksSecret: config.hooksSecret });
+const app = createApp({ budgets, missions, missionRunner, previewRunning: () => previewRunning, previewTokens, projects, training, config, store, agents, runner, skills, integrations, workflows, memory, access, triggers, evals, launcher, templatesDir: config.templatesDir, hooksSecret: config.hooksSecret });
 const scheduler = new Scheduler(triggers, (t, params) =>
   launcher.start({ prompt: params.prompt ?? "", workflowId: t.workflowId, params, profile: t.profile, approvalMode: t.approvalMode, origin: `trigger:${t.id}`, createdBy: t.name || "schedule" }).runId,
 );
 scheduler.start();
 missionRunner.start();
+// Telegram bot (docs/18): only when a token and at least the bot itself are configured. Without allowed chats it
+// answers every message with the chat id to add, and does nothing else.
+if (config.telegramToken) {
+  new TelegramBot({
+    token: config.telegramToken,
+    allowedChats: config.telegramChats,
+    lang: config.telegramLang,
+    store,
+    start: (req) => launcher.start(req),
+    decide: (runId, approvalId, decision, note) => runner.decide(runId, approvalId, decision, note),
+    cancel: (runId) => runner.cancel(runId),
+    missions,
+    missionRunner,
+    appUrl: config.publicUrl ?? `http://${config.host}:${config.port}`,
+  }).start();
+}
 
 // `npm run build` + `npm start` serves the web app from the same port (no Vite needed).
 const webDist = path.join(repoRoot, "apps/web/dist");
@@ -95,7 +114,7 @@ const server = serve({ fetch: app.fetch, hostname: config.host, port: config.por
   console.log(`  skills: ${skills.list().map((s) => s.name).join(", ") || "none"}; integrations: ${integrations.list([]).map((i) => `${i.id}(${i.status})`).join(", ") || "none"}`);
   if (existsSync(webDist)) console.log(`  web app: http://${info.address}:${info.port}/`);
   const schedules = triggers.list().filter((t) => t.enabled);
-  console.log(`  login: ${access.enabled ? `on (${access.users().length} user(s)${config.authToken ? " + AUTH_TOKEN" : ""})` : "off (local)"}; memory: ${memory.isEnabled ? "on" : "off"}; triggers: ${schedules.length} enabled`);
+  console.log(`  login: ${access.enabled ? `on (${access.users().length} user(s)${config.authToken ? " + AUTH_TOKEN" : ""})` : "off (local)"}; memory: ${memory.isEnabled ? "on" : "off"}; triggers: ${schedules.length} enabled; telegram: ${config.telegramToken ? (config.telegramChats.length ? `on (${config.telegramChats.length} chat(s))` : "waiting for TELEGRAM_ALLOWED_CHATS") : "off"}`);
   console.log(`  results: preview ${previewRunning ? `http://${config.host}:${config.previewPort}` : "off"}; GitHub export ${config.githubToken ? "on" : "off (set GITHUB_TOKEN)"}`);
   if (interrupted > 0) console.log(`  closed ${interrupted} run(s) interrupted by the last shutdown`);
   if (!auth.ok) console.warn(`  runs disabled: ${auth.reason}`);

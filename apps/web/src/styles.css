@@ -554,3 +554,12 @@ input:not([type=range]):not([type=file]) { background: var(--bg); color: var(--t
 .kanban-col.done .kanban-card { opacity: .7; text-decoration: line-through; text-decoration-color: var(--muted); }
 .kanban-col.blocked .kanban-card { border-color: var(--accent); }
 .kanban-tools { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+/* Per-agent monthly budget */
+.budget-box { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.budget-box.over { border-color: var(--fail); }
+.budget-box h4 { margin: 0; }
+.budget-box p { margin: 0; }
+.budget-box input { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; }
+.budget-box .row-gap { align-items: center; flex-wrap: wrap; }
+.tag-warn { border-color: var(--fail); color: var(--fail); }

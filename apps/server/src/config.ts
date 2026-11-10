@@ -71,6 +71,10 @@ export type Config = {
   // Extra host names the browser may use for a server bound to this computer (DNS-rebinding guard).
   allowedHosts: string[];
   // Projects (upgrade A3): Claudestra-managed project folders and the undo snapshots of applied changes.
+  // Telegram bot (docs/18): token from @BotFather, chat ids that may use it (they act as the owner), message language.
+  telegramToken: string | null;
+  telegramChats: string[];
+  telegramLang: "en" | "az";
   projectsDir: string;
   snapshotsDir: string;
   // The address people use from outside (e.g. https://team.example.com through a tunnel or proxy). When set, login is
@@ -158,6 +162,9 @@ export function loadConfig(): Config {
     webOrigins: list("WEB_ORIGINS", ["http://127.0.0.1:5173", "http://localhost:5173"]),
     allowedHosts: [...list("ALLOWED_HOSTS", []), ...(process.env.PUBLIC_URL ? [hostOf(process.env.PUBLIC_URL)] : [])].filter(Boolean),
     publicUrl: process.env.PUBLIC_URL?.replace(/\/+$/, "") || null,
+    telegramToken: process.env.TELEGRAM_BOT_TOKEN || null,
+    telegramChats: (process.env.TELEGRAM_ALLOWED_CHATS ?? "").split(",").map((x) => x.trim()).filter((x) => /^-?\d+$/.test(x)),
+    telegramLang: process.env.TELEGRAM_LANG === "en" ? "en" : "az",
     projectsDir: path.resolve(repoRoot, process.env.PROJECTS_DIR ?? "projects"),
     snapshotsDir: path.resolve(repoRoot, process.env.SNAPSHOTS_DIR ?? "data/snapshots"),
   };
