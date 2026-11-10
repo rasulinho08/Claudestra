@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { MicButton, appendSpoken } from "./Mic.tsx";
 import type { AnswerLanguage, ApprovalMode, ClaudestraEvent, HealthResponse, Profile, RunSummary, SessionInfo } from "@claudestra/protocol";
 import { useRunEvents } from "./useRunEvents.ts";
 import { activeStep, emptyRun, reduceRun, totalUsage, type RunView } from "./run-state.ts";
@@ -210,6 +211,7 @@ export function RunsPage({ health, session, initialRun, initialProject, initialA
           }}
         />
         <div className="composer-side">
+          <MicButton onText={(spoken) => setPrompt((cur) => appendSpoken(cur, spoken))} disabled={disabled} />
           <div className="segmented" role="group" aria-label={t("composer.mode")}>
             {(isOwner ? (["manual", "smart", "auto"] as const) : (["manual", "smart"] as const)).map((m) => (
               <button type="button" key={m} className={approvalMode === m ? `active mode-${m}` : ""} onClick={() => setOption({ approvalMode: m })} title={t(`modeHelp.${m}`)}>

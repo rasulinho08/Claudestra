@@ -1,6 +1,7 @@
 // Chat (docs/07 "Chat"): talk to your own agent, or to the whole team, like a messenger. The team is the contact
 // list; each conversation is a thread of runs that remember the earlier turns and continue in the same files.
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { MicButton, appendSpoken } from "../Mic.tsx";
 import type { AgentInfo, HealthResponse, SessionInfo } from "@claudestra/protocol";
 import { api, errorText } from "../api.ts";
 import { agentName, lang, t } from "../i18n.ts";
@@ -254,6 +255,7 @@ export function ChatPage({ health, session, initialAgent }: { health: HealthResp
               placeholder={liveRunId ? t("chat.waiting") : t("chat.placeholder", { name: nameOf(contactAgent) })}
               disabled={health?.canStartRuns === false}
             />
+            <MicButton onText={(spoken) => setText((cur) => appendSpoken(cur, spoken))} disabled={health?.canStartRuns === false} />
             <button className="chat-send" onClick={send} disabled={!text.trim() || busy || Boolean(liveRunId)} aria-label={t("composer.send")}>
               ➤
             </button>

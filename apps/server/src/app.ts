@@ -24,6 +24,7 @@ import type { PreviewTokens } from "./preview.ts";
 import { ProjectError, Projects } from "./projects.ts";
 import { Training } from "./training.ts";
 import { Chats } from "./chat.ts";
+import { MissionInput, MissionRunner, Missions, missionFile } from "./missions.ts";
 import { startOfDay, startOfMonth } from "./analytics.ts";
 import { HttpError, RunLauncher } from "./runs.ts";
 import { Memory } from "./memory.ts";
@@ -60,6 +61,8 @@ export type Services = {
   projects?: Projects;
   training?: Training;
   chats?: Chats;
+  missions?: Missions;
+  missionRunner?: MissionRunner;
   // Opens a folder in the OS file manager; replaceable in tests.
   openFolder?: (dir: string) => void;
 };
@@ -139,6 +142,8 @@ export function createApp(s: Services) {
   const projects = s.projects ?? new Projects(store, config.projectsDir, config.snapshotsDir, config.workspacesDir, loopbackServer);
   const launcher = s.launcher ?? new RunLauncher(config, store, agents, workflows, runner, projects);
   const evals = s.evals ?? new Evals(path.join(config.agentsDir, "../evals"), store, launcher, config.workspacesDir);
+  const missions = s.missions ?? new Missions(store);
+  const missionRunner = s.missionRunner ?? new MissionRunner({ missions, store, workspacesDir: config.workspacesDir, start: (req) => launcher.start(req) });
   const templatesDir = s.templatesDir ?? path.join(config.agentsDir, "../templates");
   const app = new Hono<Env>();
   const observers = new Map<string, HookEventMapper>();
@@ -490,6 +495,70 @@ export function createApp(s: Services) {
     }
   });
 
+  // ---- missions: long-running background work (docs/17) -------------------------------------
+
+  const myMission = (c: Context) => {
+    const m = missions.get(c.req.param("id") ?? "");
+    return m && (seesAll(c) || m.createdBy === chatUser(c)) ? m : undefined;
+  };
+  const missionView = (m: NonNullable<ReturnType<Missions["get"]>>) => ({
+    ...m,
+    waitingApproval: m.currentRunId
+      ? Number((store.database.prepare("SELECT COUNT(*) AS n FROM approvals WHERE run_id = ? AND decision IS NULL").get(m.currentRunId) as { n: number }).n)
+      : 0,
+  });
+
+  app.get("/api/missions", (c) => c.json(missions.list(chatUser(c), seesAll(c)).map(missionView)));
+
+  app.post("/api/missions", async (c) => {
+    const parsed = MissionInput.safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+    const user = c.get("user");
+    if (parsed.data.approvalMode === "auto" && user && user.role !== "owner") return c.json({ error: "only the owner can start missions in auto-approve mode" }, 403);
+    if (parsed.data.agentId && (!agents.get(parsed.data.agentId) || parsed.data.agentId === "ceo")) return c.json({ error: "agent not found" }, 404);
+    const m = missions.create(parsed.data, user?.name ?? null);
+    missionRunner.tick();
+    return c.json(missionView(missions.get(m.id)!), 201);
+  });
+
+  app.get("/api/missions/:id", (c) => {
+    const m = myMission(c);
+    if (!m) return c.json({ error: "mission not found" }, 404);
+    const filesFrom = m.currentRunId && store.status(m.currentRunId) !== "running" ? m.currentRunId : m.lastRunId;
+    const runs = missions.runs(m.id).map((r) => ({ ...r, status: store.status(r.runId) ?? "failed", costUsd: store.summary(r.runId)?.costUsd ?? null }));
+    return c.json({ ...missionView(m), runs, board: missionFile(config.workspacesDir, filesFrom, "board.md"), journal: missionFile(config.workspacesDir, filesFrom, "journal.md"), filesRunId: filesFrom });
+  });
+
+  app.post("/api/missions/:id/:action{pause|resume|stop|now|note}", async (c) => {
+    const m = myMission(c);
+    if (!m) return c.json({ error: "mission not found" }, 404);
+    const action = c.req.param("action");
+    const now = new Date();
+    if (action === "note") {
+      const parsed = z.object({ note: z.string().max(4000) }).safeParse(await body(c));
+      if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
+      missions.set(m.id, { note: parsed.data.note.trim() });
+    } else if (action === "pause") {
+      if (m.status === "active") missions.set(m.id, { status: "paused" });
+    } else if (action === "stop") {
+      if (m.currentRunId && store.status(m.currentRunId) === "running") runner.cancel(m.currentRunId);
+      missions.set(m.id, { status: "stopped", next_tick_at: null });
+    } else {
+      // resume / now: back to active and due immediately (a finished mission can be continued while time remains).
+      if (new Date(m.endsAt) <= now) return c.json({ error: "this mission's time is over; start a new one" }, 409);
+      missions.set(m.id, { status: "active", failures: 0, last_error: null, next_tick_at: now.toISOString() });
+      missionRunner.tick(now);
+    }
+    return c.json(missionView(missions.get(m.id)!));
+  });
+
+  app.delete("/api/missions/:id", async (c) => {
+    const m = myMission(c);
+    if (!m) return c.json({ error: "mission not found" }, 404);
+    if (m.currentRunId && store.status(m.currentRunId) === "running") runner.cancel(m.currentRunId);
+    return c.json({ ok: missions.remove(m.id) });
+  });
+
   // ---- projects (upgrade A3) ----------------------------------------------------------------
 
   const projectFail = (c: Context, err: unknown) => (err instanceof ProjectError ? c.json({ error: err.message }, err.status) : fail(c, err));
@@ -589,8 +658,24 @@ export function createApp(s: Services) {
       }
       return { approvalId: a.id, runId: a.run_id, stepId: a.step_id, kind: a.kind, agentId: a.agent_id ?? (a.kind === "plan" ? "ceo" : null), prompt: a.prompt, tool: request.tool ?? null, input: request.input ?? null, reason: request.reason ?? "", createdAt: a.created_at };
     });
-    const busy = new Map<string, { runId: string; task: string }>();
-    for (const st of activeSteps) if (st.agent_id && !busy.has(st.agent_id)) busy.set(st.agent_id, { runId: st.run_id, task: st.task ?? "" });
+    // What each busy agent is doing right now: its step's latest tool call (the office floor shows it).
+    const lastTool = store.database.prepare("SELECT data FROM events WHERE run_id = ? AND step_id = ? AND type = 'tool.called' ORDER BY seq DESC LIMIT 1");
+    const busy = new Map<string, { runId: string; task: string; status: string; tool: string | null; target: string | null }>();
+    for (const st of activeSteps) {
+      if (!st.agent_id || busy.has(st.agent_id)) continue;
+      let tool: string | null = null;
+      let target: string | null = null;
+      try {
+        const d = JSON.parse((lastTool.get(st.run_id, st.step_id) as { data: string } | undefined)?.data ?? "{}") as { tool?: string; input?: Record<string, unknown> };
+        tool = d.tool ?? null;
+        const t = d.input?.file_path ?? d.input?.query ?? d.input?.url ?? d.input?.pattern ?? d.input?.skill ?? d.input?.command;
+        const short = typeof t === "string" ? path.basename(t.split("?")[0]!).slice(0, 40) : "";
+        target = /[\p{L}\p{N}]/u.test(short) ? short : null;
+      } catch {
+        // no tool yet
+      }
+      busy.set(st.agent_id, { runId: st.run_id, task: st.task ?? "", status: st.status, tool, target });
+    }
     const wfName = (id: string) => workflows.get(id)?.name ?? id;
     const upcoming = triggers
       .list()
@@ -606,6 +691,7 @@ export function createApp(s: Services) {
       upcoming,
       spend: { today: store.spentSince(startOfDay()), month: store.spentSince(startOfMonth()), dailyCap: config.dailyBudgetUsd, monthlyCap: config.monthlyBudgetUsd },
       projects: projects.list().slice(0, 5),
+      missions: missions.list(chatUser(c), seesAll(c)).filter((m) => m.status === "active" || m.status === "paused").slice(0, 6),
       team: agents.all().map((a) => ({ ...a.info, skills: a.skills.length, busy: busy.get(a.info.id) ?? null })),
     });
   });

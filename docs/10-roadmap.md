@@ -86,6 +86,8 @@ memory with embeddings, Slack/Telegram notifications for approvals.
 - Social media team (docs/16): Community Manager and Content Maker agents, skills `content-calendar` and `brand-card`
   (SVG templates), built-in MCP apps `media` (PNG cards, Gemini pictures) and `social` (Postiz publishing with approval),
   the *Weekly social media* workflow template.
+- Missions, office floor, voice (docs/17): `missions.ts` heartbeat chaining runs over days with a board and journal,
+  the Office page (pixel floor of working people, command centre), microphone input in the composers.
 
 ## Open questions
 1. **Primary use case** to optimise first: software building, research reports, or business analysis? (Default assumption: software building.)

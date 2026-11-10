@@ -15,10 +15,12 @@ import { LoginPage } from "./pages/LoginPage.tsx";
 import { HqPage } from "./pages/HqPage.tsx";
 import { ChatPage } from "./pages/ChatPage.tsx";
 import { ProjectsPage } from "./pages/ProjectsPage.tsx";
+import { OfficePage } from "./pages/OfficePage.tsx";
+import { MissionsPage } from "./pages/MissionsPage.tsx";
 import { api } from "./api.ts";
 import { lang, setLang, t } from "./i18n.ts";
 
-const NAV = ["hq", "chat", "runs", "projects", "workflows", "agents", "skills", "apps", "memory", "evals", "costs", "users"] as const;
+const NAV = ["hq", "office", "chat", "missions", "runs", "projects", "workflows", "agents", "skills", "apps", "memory", "evals", "costs", "users"] as const;
 
 export function App() {
   const route = useRoute();
@@ -79,6 +81,10 @@ export function App() {
       <div className="page">
         {route.page === "hq" ? (
           <HqPage session={session} />
+        ) : route.page === "office" ? (
+          <OfficePage health={health} session={session} />
+        ) : route.page === "missions" ? (
+          <MissionsPage key={route.params.get("id") ?? ""} health={health} session={session} initial={route.params.get("id")} />
         ) : route.page === "chat" ? (
           <ChatPage key={route.params.get("agent") ?? ""} health={health} session={session} initialAgent={route.params.get("agent")} />
         ) : route.page === "projects" ? (

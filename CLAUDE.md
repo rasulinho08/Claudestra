@@ -11,6 +11,8 @@ Server: `orchestrator.ts` (run lifecycle, approvals, pause, loops, reviews), `se
 `graph.ts` + `Canvas.tsx` (React Flow), `stage/` (robot view: `world.ts` logic, `draw.ts` rendering), `pages/`.
 Phase 5 extras: `memory.ts`, `access.ts` (login/roles), `triggers.ts` + `cron.ts`, `evals.ts`, `runs.ts` (shared run launcher),
 web `WorkflowEditor.tsx` and pages Memory, Evals, Users. Windows instructions: docs/14.
+Later additions: chat (`chat.ts`), projects, social media apps (`apps/server/mcp/`, docs/16), missions (`missions.ts`), the Office
+floor (`apps/web/src/office/`) and voice input (`Mic.tsx`), docs/17.
 
 ## Order of work
 1. Read `README.md`, then docs 1, 2, 3, 6, 7, 11 and `docs/agents/`.

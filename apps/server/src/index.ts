@@ -15,6 +15,7 @@ import { Memory } from "./memory.ts";
 import { Access } from "./access.ts";
 import { RunLauncher } from "./runs.ts";
 import { Scheduler, TriggerStore } from "./triggers.ts";
+import { MissionRunner, Missions } from "./missions.ts";
 import { Evals } from "./evals.ts";
 import { demoSession } from "./demo.ts";
 import { geminiSession } from "./gemini.ts";
@@ -67,11 +68,15 @@ if (config.previewPort) {
   }
 }
 
-const app = createApp({ previewRunning: () => previewRunning, previewTokens, projects, training, config, store, agents, runner, skills, integrations, workflows, memory, access, triggers, evals, launcher, templatesDir: config.templatesDir, hooksSecret: config.hooksSecret });
+// Missions (docs/17): the heartbeat that keeps long-running work going in the background.
+const missions = new Missions(store);
+const missionRunner = new MissionRunner({ missions, store, workspacesDir: config.workspacesDir, start: (req) => launcher.start(req) });
+const app = createApp({ missions, missionRunner, previewRunning: () => previewRunning, previewTokens, projects, training, config, store, agents, runner, skills, integrations, workflows, memory, access, triggers, evals, launcher, templatesDir: config.templatesDir, hooksSecret: config.hooksSecret });
 const scheduler = new Scheduler(triggers, (t, params) =>
   launcher.start({ prompt: params.prompt ?? "", workflowId: t.workflowId, params, profile: t.profile, approvalMode: t.approvalMode, origin: `trigger:${t.id}`, createdBy: t.name || "schedule" }).runId,
 );
 scheduler.start();
+missionRunner.start();
 
 // `npm run build` + `npm start` serves the web app from the same port (no Vite needed).
 const webDist = path.join(repoRoot, "apps/web/dist");
