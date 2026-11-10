@@ -8,6 +8,7 @@ import { go } from "../router.ts";
 import { agentName, t, type Key } from "../i18n.ts";
 import { Markdown } from "../Markdown.tsx";
 import { MicButton, appendSpoken } from "../Mic.tsx";
+import { boardSize, parseBoard, type Column } from "../missionBoard.ts";
 
 export type MissionView = {
   id: string; title: string; goal: string; agentId: string | null; status: "active" | "paused" | "done" | "stopped" | "failed";
@@ -231,8 +232,10 @@ export function MissionsPage({ health, session, initial }: { health: HealthRespo
                   </a>
                 ))
               )
-            ) : (tab === "board" ? detail.board : detail.journal) ? (
-              <Markdown text={tab === "board" ? detail.board : detail.journal} className="mission-doc" />
+            ) : tab === "board" && detail.board ? (
+              <BoardView markdown={detail.board} />
+            ) : tab === "journal" && detail.journal ? (
+              <Markdown text={detail.journal} className="mission-doc" />
             ) : (
               <p className="muted small">{t("missions.noFile")}</p>
             )}
@@ -240,6 +243,63 @@ export function MissionsPage({ health, session, initial }: { health: HealthRespo
         )}
       </div>
     </div>
+  );
+}
+
+const COLUMNS: { key: Column; color: string }[] = [
+  { key: "blocked", color: "var(--accent)" },
+  { key: "todo", color: "#94a3b8" },
+  { key: "doing", color: "var(--info)" },
+  { key: "done", color: "var(--ok)" },
+];
+
+// The board file as kanban columns; the raw text stays one click away (the agents may write more than lists).
+function BoardView({ markdown }: { markdown: string }) {
+  const [asText, setAsText] = useState(false);
+  const board = parseBoard(markdown);
+  const all = boardSize(board);
+  if (all === 0 || asText) {
+    return (
+      <>
+        {all > 0 && (
+          <div className="kanban-tools">
+            <span />
+            <button className="linkish small" onClick={() => setAsText(false)}>
+              {t("missions.asBoard")}
+            </button>
+          </div>
+        )}
+        <Markdown text={markdown} className="mission-doc" />
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="kanban-tools">
+        <span className="small muted">{t("missions.progress", { done: board.done.length, all })}</span>
+        <button className="linkish small" onClick={() => setAsText(true)}>
+          {t("missions.asText")}
+        </button>
+      </div>
+      <div className="mission-progress" role="progressbar" aria-valuemin={0} aria-valuemax={all} aria-valuenow={board.done.length} aria-label={t("missions.progress", { done: board.done.length, all })}>
+        <span style={{ width: `${(board.done.length / all) * 100}%`, background: "var(--ok)" }} />
+      </div>
+      <div className="kanban">
+        {COLUMNS.filter((c) => c.key !== "blocked" || board.blocked.length > 0).map((c) => (
+          <section key={c.key} className={`kanban-col ${c.key}`} style={{ "--col": c.color } as React.CSSProperties}>
+            <h4>
+              <span>{t(`missions.col.${c.key}` as Key)}</span>
+              <span>{board[c.key].length}</span>
+            </h4>
+            {board[c.key].map((item, i) => (
+              <div key={i} className="kanban-card">
+                {item}
+              </div>
+            ))}
+          </section>
+        ))}
+      </div>
+    </>
   );
 }
 

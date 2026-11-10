@@ -4,14 +4,14 @@ export type Pt = { x: number; y: number };
 export type Place = "desk" | "shelf" | "web" | "server" | "board" | "boss" | "coffee";
 export type WorkStatus = "idle" | "working" | "waiting";
 
-export const W = 720;
-const ROOMS_BOTTOM = 104;
-export const CORRIDOR_Y = 116;
-const DESKS_TOP = 140;
-const ROW_H = 52;
-export const COLS = 7;
-const DESK_X0 = 44;
-const DESK_PITCH = 92;
+export const W = 576;
+const ROOMS_BOTTOM = 108;
+export const CORRIDOR_Y = 120;
+const DESKS_TOP = 148;
+const ROW_H = 58;
+export const COLS = 6;
+const DESK_X0 = 40;
+const DESK_PITCH = 88;
 
 export type Layout = {
   w: number;
@@ -28,32 +28,32 @@ export function layoutFor(deskCount: number): Layout {
   for (let i = 0; i < deskCount; i++) desks.push({ x: DESK_X0 + (i % COLS) * DESK_PITCH, y: DESKS_TOP + Math.floor(i / COLS) * ROW_H });
   return {
     w: W,
-    h: DESKS_TOP + rows * ROW_H + 14,
+    h: DESKS_TOP + rows * ROW_H + 12,
     desks,
-    bossDesk: { x: 58, y: 44 },
-    rooms: { boss: [8, 152], meet: [158, 362], lab: [368, 564], kitchen: [570, 712] },
+    bossDesk: { x: 44, y: 50 },
+    rooms: { boss: [6, 124], meet: [130, 290], lab: [296, 440], kitchen: [446, 570] },
     roomsBottom: ROOMS_BOTTOM,
   };
 }
 
-export const seatOf = (desk: Pt): Pt => ({ x: desk.x + 15, y: desk.y + 30 });
+export const seatOf = (desk: Pt): Pt => ({ x: desk.x + 16, y: desk.y + 34 });
 
 // Where the i-th visitor of a shared place stands, so people do not pile onto one pixel.
 export function spot(place: Exclude<Place, "desk">, i: number): Pt {
   const k = i % 5;
   switch (place) {
     case "boss":
-      return { x: 104 + k * 11, y: 92 + (k % 2) * 6 };
+      return { x: 86 + k * 8, y: 96 + (k % 2) * 6 };
     case "board":
-      return { x: 300 + k * 12, y: 34 + (k % 2) * 5 };
+      return { x: 146 + k * 7, y: 46 + (k % 2) * 5 };
     case "shelf":
-      return { x: 392 + k * 11, y: 60 + (k % 2) * 5 };
+      return { x: 308 + k * 10, y: 64 + (k % 2) * 5 };
     case "web":
-      return { x: 500 + k * 11, y: 78 + (k % 2) * 5 };
+      return { x: 392 + k * 8, y: 86 + (k % 2) * 5 };
     case "server":
-      return { x: 590 + k * 9, y: 66 + (k % 2) * 5 };
+      return { x: 458 + k * 6, y: 70 + (k % 2) * 5 };
     case "coffee":
-      return { x: 658 + k * 9, y: 70 + (k % 2) * 5 };
+      return { x: 512 + k * 8, y: 80 + (k % 2) * 5 };
   }
 }
 
@@ -71,8 +71,8 @@ export function placeFor(status: WorkStatus, tool: string | null, isBoss = false
 
 const inDeskArea = (p: Pt) => p.y > CORRIDOR_Y + 8;
 // The free lane just left of a desk column, and the free aisle just below a seat row.
-const laneX = (p: Pt) => Math.max(20, Math.round((p.x - 15 - DESK_X0) / DESK_PITCH) * DESK_PITCH + DESK_X0 - 16);
-const aisleY = (p: Pt) => Math.round((p.y - 30 - DESKS_TOP) / ROW_H) * ROW_H + DESKS_TOP + 38;
+const laneX = (p: Pt) => Math.max(20, Math.round((p.x - 16 - DESK_X0) / DESK_PITCH) * DESK_PITCH + DESK_X0 - 16);
+const aisleY = (p: Pt) => Math.round((p.y - 34 - DESKS_TOP) / ROW_H) * ROW_H + DESKS_TOP + 42;
 
 // Waypoints from a to b that stay in corridors, aisles and lanes (never across a desk).
 export function route(a: Pt, b: Pt): Pt[] {
@@ -145,7 +145,7 @@ export class OfficeSim {
       this.layout = layoutFor(staff.length);
       for (const id of [...this.actors.keys()]) if (!this.order.includes(id)) this.actors.delete(id);
     }
-    const bossSeat: Pt = { x: this.layout.bossDesk.x + 15, y: this.layout.bossDesk.y + 30 };
+    const bossSeat: Pt = seatOf(this.layout.bossDesk);
     const using = new Map<Place, number>();
     let deskIndex = 0;
     for (const w of workers) {

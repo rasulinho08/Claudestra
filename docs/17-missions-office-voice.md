@@ -48,6 +48,20 @@ Envelopes fly from the CEO to a desk when work is handed out and back when it is
 busy, otherwise a chat with them. The cards under the floor repeat every status as text (screen readers, phones).
 With "reduce motion" on, people jump to their place and nothing flies.
 
+The floor follows the real time of day (sky in the windows, wall clock, dimmer light at night). Clicking a person
+opens a small card (status, current task, links to watch the run, chat, profile); ⛶ shows the floor full screen, for
+a second monitor. The wall board counts waiting, running and finished work.
+
+## Mission board as kanban
+`apps/web/src/missionBoard.ts` reads `mission/board.md` into columns (To do, Doing, Done, Needs you) with a progress
+bar. Headings are matched loosely in English and Azerbaijani; checked boxes count as done. "Show as text" shows the
+file as written.
+
+## Notifications and navigation
+`apps/web/src/notify.ts`: the 🔔 button in the top bar turns on browser notifications (opt-in) for new approvals and
+for missions that finish or need attention; the tab title shows the number of waiting approvals. The top bar keeps
+the daily pages (HQ, Office, Chat, Missions, Runs, Projects) and moves setup pages under "More".
+
 ## Voice
 `apps/web/src/Mic.tsx`: a microphone button in the Office command centre, Chat, Runs and Missions. It uses the
 browser's speech recognition (Chrome, Edge; Azerbaijani `az-AZ` or English by UI language). The audio is handled by

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { HealthResponse, SessionInfo } from "@claudestra/protocol";
 import { useRoute } from "./router.ts";
 import { RunsPage } from "./RunsPage.tsx";
@@ -18,9 +18,12 @@ import { ProjectsPage } from "./pages/ProjectsPage.tsx";
 import { OfficePage } from "./pages/OfficePage.tsx";
 import { MissionsPage } from "./pages/MissionsPage.tsx";
 import { api } from "./api.ts";
-import { lang, setLang, t } from "./i18n.ts";
+import { lang, setLang, t, type Key } from "./i18n.ts";
+import { notifyOn, notifySupported, toggleNotify, useNotifier } from "./notify.ts";
 
-const NAV = ["hq", "office", "chat", "missions", "runs", "projects", "workflows", "agents", "skills", "apps", "memory", "evals", "costs", "users"] as const;
+// The pages people use every day are always visible; setup and admin pages sit under "More".
+const NAV = ["hq", "office", "chat", "missions", "runs", "projects"] as const;
+const MORE = ["workflows", "agents", "skills", "apps", "memory", "evals", "costs", "users"] as const;
 
 export function App() {
   const route = useRoute();
@@ -41,6 +44,18 @@ export function App() {
       .catch(() => setError(t("err.server")));
   }, []);
 
+  const [waiting, setWaiting] = useState(0);
+  const [bell, setBell] = useState(notifyOn);
+  const moreRef = useRef<HTMLDetailsElement | null>(null);
+  useNotifier(Boolean(session) && !(session?.authEnabled && !session.user) && route.page !== "stage", setWaiting);
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (moreRef.current?.open && !moreRef.current.contains(e.target as Node)) moreRef.current.removeAttribute("open");
+    };
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, []);
+
   if (session?.authEnabled && !session.user) return <LoginPage onLogin={() => window.location.reload()} />;
   if (route.page === "stage") return <StagePage params={route.params} />;
   const role = session?.user?.role ?? "owner";
@@ -50,11 +65,24 @@ export function App() {
       <header className="topbar">
         <strong className="brand">Claudestra</strong>
         <nav className="nav">
-          {NAV.filter((page) => page !== "users" || role === "owner").map((page) => (
+          {NAV.map((page) => (
             <a key={page} href={`#/${page}`} className={route.page === page ? "active" : ""}>
               {t(`nav.${page}`)}
+              {page === "hq" && waiting > 0 && <span className="nav-badge">{waiting}</span>}
             </a>
           ))}
+          <details className="nav-more" ref={moreRef}>
+            <summary className={(MORE as readonly string[]).includes(route.page) ? "active" : ""}>
+              {(MORE as readonly string[]).includes(route.page) ? t(`nav.${route.page}` as Key) : t("nav.more")} ▾
+            </summary>
+            <div className="nav-menu">
+              {MORE.filter((page) => page !== "users" || role === "owner").map((page) => (
+                <a key={page} href={`#/${page}`} className={route.page === page ? "active" : ""} onClick={() => moreRef.current?.removeAttribute("open")}>
+                  {t(`nav.${page}`)}
+                </a>
+              ))}
+            </div>
+          </details>
         </nav>
         {health && (
           <span className={`badge ${health.canStartRuns ? "" : "badge-warn"}`} title={health.warning}>
@@ -68,6 +96,11 @@ export function App() {
               {t("top.logout")}
             </button>
           </span>
+        )}
+        {notifySupported() && (
+          <button className={`ghost bell ${bell ? "on" : ""}`} onClick={() => void toggleNotify().then(setBell)} title={bell ? t("notify.on") : t("notify.off")} aria-pressed={bell} aria-label={bell ? t("notify.on") : t("notify.off")}>
+            {bell ? "🔔" : "🔕"}
+          </button>
         )}
         <a className="ghost stage-link" href="#/stage?run=live" target="_blank" rel="noreferrer" title={t("top.stageWindowTitle")}>
           {t("top.stageWindow")}

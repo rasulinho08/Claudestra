@@ -17,6 +17,7 @@ type Hq = {
   upcoming: { id: string; name: string; workflow: string; nextRunAt: string }[];
   spend: { today: number; month: number; dailyCap: number | null; monthlyCap: number | null };
   projects: { id: string; name: string; runs: number; lastRunAt: string | null; folder: string | null }[];
+  missions?: { id: string; title: string; status: string; ticks: number; currentRunId: string | null; nextTickAt: string | null }[];
   team: { id: string; name: string; persona?: string; color: string; icon: string; description: string; modelClass: string; skills: number; busy: { runId: string; task: string } | null }[];
 };
 
@@ -89,9 +90,14 @@ export function HqPage({ session }: { session?: SessionInfo | null }) {
             {hq.approvals.length > 0 && <strong className="hq-alert"> · {t("hq.needsYou", { n: hq.approvals.length })}</strong>}
           </p>
         </div>
-        <button className="hq-new" onClick={() => go("runs")}>
-          + {t("hq.newTask")}
-        </button>
+        <div className="row-gap">
+          <a className="ghost" href="#/office">
+            🏢 {t("nav.office")}
+          </a>
+          <button className="hq-new" onClick={() => go("runs")}>
+            + {t("hq.newTask")}
+          </button>
+        </div>
       </header>
       {error && <div className="error small">{error}</div>}
 
@@ -177,6 +183,24 @@ export function HqPage({ session }: { session?: SessionInfo | null }) {
             {t("hq.manageTeam")} →
           </a>
         </section>
+
+        {(hq.missions?.length ?? 0) > 0 && (
+          <section className="hq-card">
+            <h3>🚀 {t("hq.missions")}</h3>
+            {hq.missions!.map((m) => (
+              <a key={m.id} className="hq-row" href={`#/missions?id=${m.id}`}>
+                <span className={`dot ${m.currentRunId ? "dot-running" : "dot-completed"}`} />
+                <span className="hq-row-main">{m.title}</span>
+                <span className="small muted">
+                  {m.currentRunId ? t("missions.workingNow") : t(`missions.status.${m.status}` as Key)} · {t("missions.sessions", { n: m.ticks })}
+                </span>
+              </a>
+            ))}
+            <a className="small" href="#/missions">
+              {t("office.allMissions")} →
+            </a>
+          </section>
+        )}
 
         <section className="hq-card">
           <h3>🕘 {t("hq.recent")}</h3>

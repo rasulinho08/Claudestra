@@ -71,6 +71,30 @@ const askedForChanges = new Set<string>();
 
 type Tool = { tool: string; input: Record<string, unknown>; output: string; run?: () => Promise<void> };
 
+// Demo missions (docs/17): each work session moves one task along the board, so the Missions page has something
+// to show without a real AI. The fourth session finishes the mission.
+function missionTools(req: SessionRequest): Tool[] {
+  const session = Number(/Long-running mission \(work session (\d+)\)/.exec(req.prompt)?.[1] ?? 0);
+  if (!session || req.agent.info.id === "ceo") return [];
+  const tasks = ["Understand the goal and split it into tasks", "Research and collect sources", "Write the first draft", "Review and finish the report"];
+  const done = tasks.slice(0, Math.min(session, tasks.length));
+  const doing = tasks.slice(done.length, done.length + 1);
+  const todo = tasks.slice(done.length + 1);
+  const list = (items: string[]) => (items.length ? items.map((i) => `- ${i}`).join("\n") : "- none");
+  const board = `${done.length === tasks.length ? "MISSION STATUS: DONE\n" : ""}# Mission board (demo)\n\n## Todo\n${list(todo)}\n\n## Doing\n${list(doing)}\n\n## Done\n${list(done)}\n\n## Blocked: needs owner\n- none\n`;
+  const journal = `# Journal (demo)\n\n${done.map((d, i) => `## Work session ${i + 1}\n- Done: ${d}\n- Next: ${tasks[i + 1] ?? "nothing, the mission is complete"}\n`).join("\n")}`;
+  const write = (rel: string, content: string): Tool => ({
+    tool: "Write",
+    input: { file_path: path.join(req.workspace, rel), content },
+    output: `File created successfully at: ${rel}`,
+    run: async () => {
+      await mkdir(path.dirname(path.join(req.workspace, rel)), { recursive: true });
+      await writeFile(path.join(req.workspace, rel), content, "utf8");
+    },
+  });
+  return [{ tool: "Read", input: { file_path: path.join(req.workspace, "mission/board.md") }, output: "(demo) board read" }, write("mission/board.md", board), write("mission/journal.md", journal)];
+}
+
 function toolsFor(req: SessionRequest, request: string): Tool[] {
   const slug = (request.toLocaleLowerCase("az").match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => w.length > 3 && !SLUG_SKIP.has(w)).slice(0, 2).join("-") || "result";
   const file = (rel: string, content: string): Tool => ({
@@ -199,7 +223,7 @@ export const demoSession: SessionRunner = async (req): Promise<SessionOutcome> =
     const loaded = await runLocalTool("Skill", { skill: req.skills[0]! }, req.workspace, signal).catch(() => ({ ok: false, output: "" }));
     if (loaded.ok) skillCalls.push({ tool: "Skill", input: { skill: req.skills[0]! }, output: loaded.output.slice(0, 600) });
   }
-  for (const t of [...skillCalls, ...toolsFor(req, request)]) {
+  for (const t of [...skillCalls, ...toolsFor(req, request), ...missionTools(req)]) {
     if (signal.aborted) break;
     const callId = `demo-${randomUUID()}`;
     emit({ type: "tool.called", data: { callId, tool: t.tool, input: t.input } });

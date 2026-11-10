@@ -1,6 +1,6 @@
 // Office (docs/17): the team as people on an office floor, plus a command centre: give one task (typed or spoken)
 // that runs once or keeps going in the background for days as a mission, and answer what needs you.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HealthResponse, SessionInfo } from "@claudestra/protocol";
 import { api, errorText } from "../api.ts";
 import { go } from "../router.ts";
@@ -21,14 +21,14 @@ type Hq = {
 // What the bubble over a working person says.
 export function activityLabel(b: Busy): string {
   if (b.status === "waiting_approval") return `⏸ ${t("office.waiting")}`;
-  const on = b.target ? ` ${b.target}` : "";
+  const on = b.target ? `: ${b.target}` : "";
   const tool = b.tool ?? "";
   if (/^(Write|Edit)$/.test(tool)) return `${t("office.writing")}${on}`;
   if (/^(Read|Glob|Grep)$/.test(tool)) return `${t("office.reading")}${on}`;
   if (/^(WebSearch|WebFetch)$/.test(tool)) return `${t("office.searching")}${on}`;
   if (tool === "Bash") return t("office.running");
   if (tool === "Skill") return `${t("office.skill")}${on}`;
-  if (tool.startsWith("mcp__")) return `${t("office.app")} ${tool.split("__")[1] ?? ""}`;
+  if (tool.startsWith("mcp__")) return `${t("office.app")}: ${tool.split("__")[1] ?? ""}`;
   return t("office.thinking");
 }
 
@@ -110,20 +110,26 @@ export function OfficePage({ health, session }: { health: HealthResponse | null;
     }
   }
 
-  function pick(id: string) {
-    const a = hq?.team.find((x) => x.id === id);
-    if (!a) return;
-    if (a.busy) go("runs", { run: a.busy.runId });
-    else if (id !== "ceo") go("chat", { agent: id });
-    else go("chat");
+  // Clicking a person opens a small card next to them.
+  const [picked, setPicked] = useState<{ id: string; x: number; y: number } | null>(null);
+  function pick(id: string | null, at: { x: number; y: number }) {
+    setPicked(id ? { id, x: Math.min(at.x, window.innerWidth - 290), y: Math.min(at.y + 12, window.innerHeight - 220) } : null);
   }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPicked(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const pickedAgent = picked ? hq?.team.find((x) => x.id === picked.id) : undefined;
+  const mainRef = useRef<HTMLElement | null>(null);
+  const toggleFull = () => (document.fullscreenElement ? void document.exitFullscreen() : void mainRef.current?.requestFullscreen?.().catch(() => {}));
 
   const working = workers.filter((w) => w.status !== "idle").length;
   const isOwner = (session?.user?.role ?? "owner") === "owner";
 
   return (
     <div className="office-page">
-      <section className="office-main">
+      <section className="office-main" ref={mainRef}>
         <header className="office-head">
           <div>
             <h1>{t("office.title")}</h1>
@@ -136,10 +142,44 @@ export function OfficePage({ health, session }: { health: HealthResponse | null;
             <span>⏸ {t("office.legendWait")}</span>
           </div>
         </header>
-        <OfficeFloor workers={workers} board={board} onPick={pick} ariaLabel={t("office.aria", { n: workers.length, busy: working })} />
+        <div className="office-stage">
+          <OfficeFloor workers={workers} board={board} onPick={pick} selected={picked?.id ?? null} ariaLabel={t("office.aria", { n: workers.length, busy: working })} />
+          <button className="office-full ghost" onClick={toggleFull} title={t("office.fullscreen")} aria-label={t("office.fullscreen")}>
+            ⛶
+          </button>
+        </div>
+        {picked && pickedAgent && (
+          <div className="office-pop" style={{ left: picked.x, top: picked.y, "--agent": pickedAgent.color } as React.CSSProperties} role="dialog" aria-label={nameOf(pickedAgent)}>
+            <button className="linkish office-pop-close" onClick={() => setPicked(null)} aria-label={t("office.close")}>
+              ✕
+            </button>
+            <strong>{nameOf(pickedAgent)}</strong>
+            <div className="small muted">{pickedAgent.persona ? agentName(pickedAgent.id, pickedAgent.name) : pickedAgent.description.slice(0, 90)}</div>
+            <div className="small office-pop-status">
+              <span className={`chip ${pickedAgent.busy ? (pickedAgent.busy.status === "waiting_approval" ? "chip-warn" : "chip-ok") : ""}`}>
+                {pickedAgent.busy ? (pickedAgent.busy.status === "waiting_approval" ? t("office.stateWaiting") : t("office.stateWorking")) : t("office.stateIdle")}
+              </span>{" "}
+              {pickedAgent.busy ? (pickedAgent.id === "ceo" ? t("office.planning") : activityLabel(pickedAgent.busy)) : ""}
+            </div>
+            {pickedAgent.busy?.task && <div className="small office-pop-task">{pickedAgent.busy.task.slice(0, 160)}</div>}
+            <div className="row-gap">
+              {pickedAgent.busy && (
+                <a className="ghost" href={`#/runs?run=${pickedAgent.busy.runId}`}>
+                  👁 {t("missions.watch")}
+                </a>
+              )}
+              <a className="ghost" href={pickedAgent.id === "ceo" ? "#/chat" : `#/chat?agent=${pickedAgent.id}`}>
+                💬 {t("nav.chat")}
+              </a>
+              <a className="ghost" href="#/agents">
+                🎓 {t("office.profile")}
+              </a>
+            </div>
+          </div>
+        )}
         <div className="office-cards" role="list">
           {(hq?.team ?? []).map((a) => (
-            <button key={a.id} role="listitem" className={`office-card ${a.busy ? "busy" : ""}`} style={{ "--agent": a.color } as React.CSSProperties} onClick={() => pick(a.id)} title={a.busy?.task || a.description}>
+            <button key={a.id} role="listitem" className={`office-card ${a.busy ? "busy" : ""}`} style={{ "--agent": a.color } as React.CSSProperties} onClick={(e) => pick(a.id, { x: e.clientX, y: e.clientY })} title={a.busy?.task || a.description}>
               <span className="office-card-name">{nameOf(a)}</span>
               <span className={`chip ${a.busy ? (a.busy.status === "waiting_approval" ? "chip-warn" : "chip-ok") : ""}`}>
                 {a.busy ? (a.busy.status === "waiting_approval" ? t("office.stateWaiting") : t("office.stateWorking")) : t("office.stateIdle")}
