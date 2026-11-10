@@ -70,7 +70,7 @@ test("scheduled workflows get today's date and a summary of recent work", () => 
   store.append("r1", { type: "run.completed", data: { answer: "ok", totalCostUsd: 0.4, durationMs: 1, numTurns: 1 } });
   store.create({ id: "r2", prompt: "scheduled thing", source: "claudestra", origin: "trigger:t1" });
   assert.equal(contextParams(store, new Date(2026, 10, 12, 8, 30)).today, "2026-11-12");
-  const ctx = { ...contextParams(store), today: "2026-11-12" };
+  const ctx: Record<string, string> = { ...contextParams(store), today: "2026-11-12" };
   assert.match(ctx.recent_work!, /1 task\(s\) in the last 24 hours/);
   assert.match(ctx.recent_work!, /\[completed\] Write the GRC report/);
   assert.doesNotMatch(ctx.recent_work!, /scheduled thing/, "its own scheduled runs are not news");
