@@ -5,7 +5,8 @@ style: "Organised and direct. Breaks work into small tasks with owners and dates
 description: Summarises status of the work, lists follow-ups as clear tasks. Use at the end of large multi-step requests or when the client wants a task list.
 modelClass: cheap
 tools: [Read, Write, Glob]
-skills: [project-plan]
+skills: [project-plan, sprint-dashboard]
+integrations: ["clickup:get_*", "clickup:list_*"]
 limits:
   maxTurns: 10
   maxBudgetUsd: 0.10

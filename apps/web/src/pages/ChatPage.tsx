@@ -2,6 +2,7 @@
 // list; each conversation is a thread of runs that remember the earlier turns and continue in the same files.
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { MicButton, appendSpoken } from "../Mic.tsx";
+import { AttachButton, AttachedFiles, type Attached } from "../Attach.tsx";
 import type { AgentInfo, HealthResponse, SessionInfo } from "@claudestra/protocol";
 import { api, errorText } from "../api.ts";
 import { agentName, lang, t } from "../i18n.ts";
@@ -96,6 +97,7 @@ export function ChatPage({ health, session, initialAgent }: { health: HealthResp
     endRef.current?.scrollIntoView({ block: "end" });
   }, [detail?.turns.length, live.run.lastSeq]);
 
+  const [attached, setAttached] = useState<Attached>(null);
   async function send() {
     const prompt = text.trim();
     if (!prompt || busy || liveRunId) return;
@@ -108,8 +110,9 @@ export function ChatPage({ health, session, initialAgent }: { health: HealthResp
         id = conv.id;
         setOpenId(id);
       }
-      await api(`/api/conversations/${id}/messages`, { body: { prompt, language: lang() === "az" ? "az" : "auto" } });
+      await api(`/api/conversations/${id}/messages`, { body: { prompt, language: lang() === "az" ? "az" : "auto", uploadId: attached?.id } });
       setText("");
+      setAttached(null);
       loadDetail(id);
       loadConvs();
     } catch (err) {
@@ -245,6 +248,7 @@ export function ChatPage({ health, session, initialAgent }: { health: HealthResp
 
         <footer className="chat-compose">
           {error && <div className="error small">{error}</div>}
+          <AttachedFiles value={attached} onClear={() => setAttached(null)} />
           <div className="chat-input">
             <textarea
               id="chat-input"
@@ -255,6 +259,7 @@ export function ChatPage({ health, session, initialAgent }: { health: HealthResp
               placeholder={liveRunId ? t("chat.waiting") : t("chat.placeholder", { name: nameOf(contactAgent) })}
               disabled={health?.canStartRuns === false}
             />
+            <AttachButton value={attached} onChange={setAttached} disabled={health?.canStartRuns === false} />
             <MicButton onText={(spoken) => setText((cur) => appendSpoken(cur, spoken))} disabled={health?.canStartRuns === false} />
             <button className="chat-send" onClick={send} disabled={!text.trim() || busy || Boolean(liveRunId)} aria-label={t("composer.send")}>
               ➤

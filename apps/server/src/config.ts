@@ -48,6 +48,8 @@ export type Config = {
   // OS-level sandbox for Bash where Claude Code supports it (Linux/macOS).
   osSandbox: boolean;
   workspacesDir: string;
+  // Attachments wait here until their run starts (docs/19).
+  uploadsDir: string;
   agentsDir: string;
   // People's own agents (git-ignored): team/agents/*.md, loaded after agents/.
   teamAgentsDir: string;
@@ -144,6 +146,7 @@ export function loadConfig(): Config {
     monthlyBudgetUsd: optionalNum("MONTHLY_BUDGET_USD"),
     osSandbox: (process.env.OS_SANDBOX ?? "auto") === "auto" ? process.platform !== "win32" : process.env.OS_SANDBOX === "on",
     workspacesDir: path.resolve(repoRoot, process.env.WORKSPACES_DIR ?? "workspaces"),
+    uploadsDir: path.resolve(repoRoot, process.env.UPLOADS_DIR ?? "data/uploads"),
     agentsDir: path.resolve(repoRoot, process.env.AGENTS_DIR ?? "agents"),
     teamAgentsDir: path.resolve(repoRoot, process.env.TEAM_AGENTS_DIR ?? "team/agents"),
     skillsDir: path.resolve(repoRoot, process.env.SKILLS_DIR ?? "skills"),

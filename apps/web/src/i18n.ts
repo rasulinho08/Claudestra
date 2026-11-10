@@ -3,6 +3,11 @@
 export type Lang = "en" | "az";
 
 const en = {
+  "office.reviewing": "reviewing the work",
+  "office.stateMeeting": "in a meeting",
+  "attach.add": "Attach files (documents, tables, pictures)",
+  "attach.list": "Attached files",
+  "attach.remove": "Remove",
   "agents.budget": "Monthly budget",
   "agents.budgetHelp": "The most this agent may spend in a calendar month. At the limit it stops taking work until the 1st or until you raise it. Leave empty for no limit.",
   "agents.budgetSpent": "spent this month: ${n}",
@@ -453,6 +458,11 @@ const en = {
 export type Key = keyof typeof en;
 
 const az: Record<Key, string> = {
+  "office.reviewing": "nəticəni yoxlayır",
+  "office.stateMeeting": "iclasdadır",
+  "attach.add": "Fayl əlavə et (sənəd, cədvəl, şəkil)",
+  "attach.list": "Əlavə olunmuş fayllar",
+  "attach.remove": "Sil",
   "agents.budget": "Aylıq büdcə",
   "agents.budgetHelp": "Bu agentin bir təqvim ayında xərcləyə biləcəyi ən çox məbləğ. Limitə çatanda ayın 1-nə qədər və ya siz limiti artırana qədər iş götürmür. Limit istəmirsinizsə, boş saxlayın.",
   "agents.budgetSpent": "bu ay xərclənib: ${n}",

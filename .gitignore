@@ -11,3 +11,4 @@ data/*.db-*
 .DS_Store
 integrations.json
 team/
+data/uploads/

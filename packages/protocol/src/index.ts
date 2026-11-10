@@ -204,6 +204,8 @@ export const CreateRunRequest = z.object({
   projectId: z.string().max(64).optional(),
   // Send the task straight to this agent instead of the CEO.
   agentId: z.string().max(64).optional(),
+  // Files uploaded with POST /api/uploads; they are copied into the run's workspace (inputs/).
+  uploadId: z.string().uuid().optional(),
 });
 export type CreateRunRequest = z.infer<typeof CreateRunRequest>;
 

@@ -68,7 +68,7 @@ export class Access {
   }
 }
 
-const OPERATOR_WRITES = [/^\/api\/runs(\/|$)/, /^\/api\/evals\/[^/]+\/run$/, /^\/api\/agents\/[^/]+\/training$/, /^\/api\/conversations(\/|$)/, /^\/api\/missions(\/|$)/];
+const OPERATOR_WRITES = [/^\/api\/runs(\/|$)/, /^\/api\/evals\/[^/]+\/run$/, /^\/api\/agents\/[^/]+\/training$/, /^\/api\/conversations(\/|$)/, /^\/api\/missions(\/|$)/, /^\/api\/uploads$/];
 
 // Minimum role for a request (GET is read access).
 export function requiredRole(method: string, path: string): Role {

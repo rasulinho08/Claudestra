@@ -90,5 +90,22 @@
     "readTools": [
       "list_channels"
     ]
+  },
+  "clickup": {
+    "description": "Built-in: read ClickUp spaces, sprint folders, lists and tasks (with sprint points); create tasks and comments only after your approval. Token: ClickUp → Settings → Apps → API Token.",
+    "type": "stdio",
+    "command": "${CLAUDESTRA_NODE}",
+    "args": [
+      "${CLAUDESTRA_ROOT}/apps/server/mcp/clickup.mjs"
+    ],
+    "env": {
+      "CLICKUP_TOKEN": "${CLICKUP_TOKEN}",
+      "CLICKUP_URL": "${CLICKUP_URL:-https://api.clickup.com/api/v2}"
+    },
+    "readTools": [
+      "get_workspace",
+      "list_tasks",
+      "get_task"
+    ]
   }
 }

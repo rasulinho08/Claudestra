@@ -7,7 +7,7 @@ description: Use when asked for a sprint dashboard or sprint report page: fills 
 The team's sprint dashboards always use `template.html` in this skill folder (read it with Read: `.claude/skills/sprint-dashboard/template.html`). Do not redesign it: same tiles, colours, charts and Azerbaijani labels.
 
 ## Steps
-1. Collect the sprint's tasks from what the user gave you (ClickUp export, a list, an earlier dashboard). For each task you need: project (GRC / General / AI Proxy), title, assignees, points (xal), work type, status. Ask for anything missing instead of guessing points or people.
+1. Collect the sprint's tasks. If you have the ClickUp tools, read them yourself: `mcp__clickup__get_workspace` to find the sprint's lists (one per project folder), then `mcp__clickup__list_tasks` for each list. Otherwise use what the user gave you (ClickUp export, a list, an earlier dashboard). For each task you need: project (GRC / General / AI Proxy), title, assignees, points (xal), work type, status. Ask for anything missing instead of guessing points or people.
 2. Copy `template.html` to `dashboards/sprint-<number or dates>.html` in the workspace.
 3. Replace only the block between `// ===== DATA` and `// ===== END DATA =====`:
    - `P`: one entry per person `{id:'NG', n:'Full Name', c:'--c1'}`; ids are initials; colours `--c1`…`--c7` in order.

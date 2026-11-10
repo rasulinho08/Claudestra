@@ -8,7 +8,7 @@ import {
 } from "./art.ts";
 import { CORRIDOR_Y, OfficeSim, seatOf, type Layout, type WorkStatus } from "./floor.ts";
 
-export type FloorWorker = { id: string; name: string; color: string; isBoss: boolean; status: WorkStatus; tool: string | null; label: string | null };
+export type FloorWorker = { id: string; name: string; color: string; isBoss: boolean; status: WorkStatus; tool: string | null; label: string | null; meeting?: boolean };
 
 type Props = {
   workers: FloorWorker[];

@@ -88,6 +88,9 @@ memory with embeddings, Slack/Telegram notifications for approvals.
   the *Weekly social media* workflow template.
 - Missions, office floor, voice (docs/17): `missions.ts` heartbeat chaining runs over days with a board and journal,
   the Office page (pixel floor of working people, command centre), microphone input in the composers.
+- Telegram bot and per-agent monthly budgets (docs/18): `telegram.ts`, `budgets.ts`.
+- Attachments, ClickUp and meetings (docs/19): `uploads.ts` (files into `inputs/`), built-in `clickup` MCP app,
+  agents gathering in the meeting room while the CEO reviews.
 
 ## Open questions
 1. **Primary use case** to optimise first: software building, research reports, or business analysis? (Default assumption: software building.)

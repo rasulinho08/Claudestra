@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { MicButton, appendSpoken } from "./Mic.tsx";
+import { AttachButton, AttachedFiles, type Attached } from "./Attach.tsx";
 import type { AnswerLanguage, ApprovalMode, ClaudestraEvent, HealthResponse, Profile, RunSummary, SessionInfo } from "@claudestra/protocol";
 import { useRunEvents } from "./useRunEvents.ts";
 import { activeStep, emptyRun, reduceRun, totalUsage, type RunView } from "./run-state.ts";
@@ -112,15 +113,17 @@ export function RunsPage({ health, session, initialRun, initialProject, initialA
     save(OPTS_KEY, next);
   }
 
+  const [attached, setAttached] = useState<Attached>(null);
   async function send(e: FormEvent) {
     e.preventDefault();
     if (!prompt.trim() || sending) return;
     setSending(true);
     setError(null);
     try {
-      const body = await api<{ runId: string }>("/api/runs", { body: { prompt, profile, approvalMode, language: opts.language, projectId: projectId || undefined, agentId: target || undefined } });
+      const body = await api<{ runId: string }>("/api/runs", { body: { prompt, profile, approvalMode, language: opts.language, projectId: projectId || undefined, agentId: target || undefined, uploadId: attached?.id } });
       openRun(body.runId);
       setPrompt("");
+      setAttached(null);
       refreshRuns();
     } catch (err) {
       setError(errorText(err));
@@ -211,7 +214,9 @@ export function RunsPage({ health, session, initialRun, initialProject, initialA
           }}
         />
         <div className="composer-side">
+          <AttachButton value={attached} onChange={setAttached} disabled={disabled} />
           <MicButton onText={(spoken) => setPrompt((cur) => appendSpoken(cur, spoken))} disabled={disabled} />
+          <AttachedFiles value={attached} onClear={() => setAttached(null)} />
           <div className="segmented" role="group" aria-label={t("composer.mode")}>
             {(isOwner ? (["manual", "smart", "auto"] as const) : (["manual", "smart"] as const)).map((m) => (
               <button type="button" key={m} className={approvalMode === m ? `active mode-${m}` : ""} onClick={() => setOption({ approvalMode: m })} title={t(`modeHelp.${m}`)}>

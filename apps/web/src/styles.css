@@ -563,3 +563,9 @@ input:not([type=range]):not([type=file]) { background: var(--bg); color: var(--t
 .budget-box input { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; }
 .budget-box .row-gap { align-items: center; flex-wrap: wrap; }
 .tag-warn { border-color: var(--fail); color: var(--fail); }
+
+/* Attachments */
+.attach-wrap { display: inline-flex; position: relative; flex: none; }
+.attach-btn.has { border-color: var(--accent); }
+.attached { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+.attached-chip { max-width: 240px; overflow: hidden; text-overflow: ellipsis; color: var(--text); }

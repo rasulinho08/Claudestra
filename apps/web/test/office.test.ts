@@ -13,6 +13,10 @@ test("tools send a worker to the right place", () => {
   assert.equal(placeFor("working", "mcp__social__create_post"), "desk");
   assert.equal(placeFor("waiting", "Bash"), "boss");
   assert.equal(placeFor("working", null, true), "board");
+  assert.equal(placeFor("idle", null, false, true), "meeting", "gathers while the CEO reviews");
+  assert.equal(placeFor("working", "Write", false, true), "desk", "working people stay at work");
+  assert.deepEqual(spot("meeting", 0), { x: 195, y: 92 });
+  assert.notDeepEqual(spot("meeting", 5), spot("meeting", 6));
 });
 
 test("routes move along one axis at a time and use the corridor", () => {

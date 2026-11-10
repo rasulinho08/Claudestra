@@ -1,7 +1,7 @@
 // The office floor's logic (docs/17): where the rooms and desks are, where a worker should be for what it is
 // doing, and how it walks there. No drawing here (see art.ts and OfficeFloor.tsx), so it can be tested.
 export type Pt = { x: number; y: number };
-export type Place = "desk" | "shelf" | "web" | "server" | "board" | "boss" | "coffee";
+export type Place = "desk" | "shelf" | "web" | "server" | "board" | "boss" | "coffee" | "meeting";
 export type WorkStatus = "idle" | "working" | "waiting";
 
 export const W = 576;
@@ -54,13 +54,17 @@ export function spot(place: Exclude<Place, "desk">, i: number): Pt {
       return { x: 458 + k * 6, y: 70 + (k % 2) * 5 };
     case "coffee":
       return { x: 512 + k * 8, y: 80 + (k % 2) * 5 };
+    case "meeting":
+      // the five chairs on the near side of the table, then standing room beside it
+      return i < 5 ? { x: 195 + i * 14, y: 92 } : { x: 172 - (i % 2) * 8, y: 72 + ((i - 5) % 4) * 8 };
   }
 }
 
 // Which place a tool call sends the worker to. Writing happens at the worker's own desk.
-export function placeFor(status: WorkStatus, tool: string | null, isBoss = false): Place {
+export function placeFor(status: WorkStatus, tool: string | null, isBoss = false, meeting = false): Place {
   if (status === "waiting") return "boss";
-  if (status === "idle") return "desk";
+  // The CEO is reviewing work this person took part in: they gather in the meeting room.
+  if (status === "idle") return meeting ? "meeting" : "desk";
   if (isBoss) return "board";
   if (!tool) return "desk";
   if (/^(Read|Glob|Grep|Skill)$/.test(tool)) return "shelf";
@@ -108,7 +112,7 @@ export function route(a: Pt, b: Pt): Pt[] {
   return out;
 }
 
-export type WorkerInput = { id: string; isBoss: boolean; status: WorkStatus; tool: string | null };
+export type WorkerInput = { id: string; isBoss: boolean; status: WorkStatus; tool: string | null; meeting?: boolean };
 
 export type Actor = {
   id: string;
@@ -165,9 +169,9 @@ export class OfficeSim {
         if (a.status !== "idle" && w.status === "idle") this.envelopes.push({ from: a.pos, to: bossSeat, start: now, duration: 1100 });
       }
       a.status = w.status;
-      let place = placeFor(w.status, w.tool, w.isBoss);
+      let place = placeFor(w.status, w.tool, w.isBoss, w.meeting);
       // A short coffee break now and then for people with nothing to do.
-      if (w.status === "idle" && !w.isBoss && !this.calm) {
+      if (w.status === "idle" && !w.isBoss && !this.calm && !w.meeting) {
         if (now > a.nextBreak) {
           a.breakUntil = now + 9000;
           a.nextBreak = now + 45_000 + (hashOf(w.id + now) % 60_000);

@@ -35,6 +35,7 @@ export function testConfig(over: Partial<Config> = {}): Config {
     monthlyBudgetUsd: null,
     osSandbox: false,
     workspacesDir: path.join(process.env.TMPDIR ?? "/tmp", "claudestra-test-workspaces"),
+    uploadsDir: path.join(process.env.TMPDIR ?? "/tmp", "claudestra-test-uploads"),
     agentsDir,
     teamAgentsDir: path.join(root, "team", "agents"),
     skillsDir: path.join(root, "skills"),

@@ -11,6 +11,7 @@ import { startOfDay, startOfMonth } from "./analytics.ts";
 import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { ProjectError, type Projects } from "./projects.ts";
+import { UploadError, Uploads, attachmentNote } from "./uploads.ts";
 
 export class HttpError extends Error {
   constructor(public status: 400 | 403 | 404 | 409 | 429, message: string) {
@@ -31,6 +32,8 @@ export type RunRequest = {
   // Chat (chat.ts): earlier turns of the conversation, and the run whose files this one continues from.
   history?: string;
   seedFrom?: string;
+  // Attachments (uploads.ts) to copy into the workspace.
+  uploadId?: string;
   createdBy?: string;
   // Who started it: "user", "trigger:<id>", "eval:<id>".
   origin?: string;
@@ -46,6 +49,7 @@ export class RunLauncher {
     private workflows: WorkflowStore,
     private runner: Starter,
     private projects?: Projects,
+    private uploads: Uploads = new Uploads(config.uploadsDir),
   ) {}
 
   start(req: RunRequest): { runId: string } {
@@ -111,6 +115,20 @@ export class RunLauncher {
         throw err;
       }
     }
+    // Attachments go to inputs/ (inside .claudestra/ for project runs, so they are not offered as project changes).
+    let filesNote = "";
+    if (req.uploadId) {
+      const workspace = path.join(this.config.workspacesDir, runId);
+      const sub = project ? ".claudestra/inputs" : "inputs";
+      try {
+        mkdirSync(workspace, { recursive: true });
+        filesNote = attachmentNote(sub, this.uploads.attach(req.uploadId, workspace, sub, req.createdBy ?? null));
+      } catch (err) {
+        rmSync(workspace, { recursive: true, force: true });
+        if (err instanceof UploadError) throw new HttpError(400, err.message);
+        throw err;
+      }
+    }
     this.store.create({ id: runId, prompt, source: "claudestra", createdBy: req.createdBy, origin: req.origin });
     this.store.append(runId, {
       type: "run.started",
@@ -130,7 +148,7 @@ export class RunLauncher {
         ...(project ? { project: { id: project.id, name: project.name } } : {}),
       },
     });
-    const contextNote = [projectNote, req.history ?? ""].filter(Boolean).join("\n\n");
+    const contextNote = [projectNote, filesNote, req.history ?? ""].filter(Boolean).join("\n\n");
     this.runner.start(runId, { prompt, profile, approvalMode, plan, language: req.language ?? "auto", projectNote: contextNote }).catch((err: unknown) => {
       if (this.store.status(runId) === "running") this.store.append(runId, { type: "run.failed", data: { error: err instanceof Error ? err.message : String(err) } });
     });

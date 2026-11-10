@@ -25,6 +25,7 @@ import { ProjectError, Projects } from "./projects.ts";
 import { Training } from "./training.ts";
 import { Chats } from "./chat.ts";
 import { AgentBudgets } from "./budgets.ts";
+import { MAX_FILES, UploadError, Uploads } from "./uploads.ts";
 import { MissionInput, MissionRunner, Missions, missionFile } from "./missions.ts";
 import { startOfDay, startOfMonth } from "./analytics.ts";
 import { HttpError, RunLauncher } from "./runs.ts";
@@ -145,6 +146,7 @@ export function createApp(s: Services) {
   const launcher = s.launcher ?? new RunLauncher(config, store, agents, workflows, runner, projects);
   const evals = s.evals ?? new Evals(path.join(config.agentsDir, "../evals"), store, launcher, config.workspacesDir);
   const budgets = s.budgets ?? new AgentBudgets(store);
+  const uploads = new Uploads(config.uploadsDir);
   const missions = s.missions ?? new Missions(store);
   const missionRunner = s.missionRunner ?? new MissionRunner({ missions, store, workspacesDir: config.workspacesDir, start: (req) => launcher.start(req) });
   const templatesDir = s.templatesDir ?? path.join(config.agentsDir, "../templates");
@@ -267,6 +269,26 @@ export function createApp(s: Services) {
       return c.json({ runId }, 201);
     } catch (err) {
       return fail(c, err);
+    }
+  });
+
+  // Attachments (docs/19): upload first, then pass the returned id as uploadId when starting the task.
+  app.post("/api/uploads", async (c) => {
+    let form: Record<string, unknown>;
+    try {
+      form = await c.req.parseBody({ all: true });
+    } catch {
+      return c.json({ error: "send the files as multipart/form-data in the field \"files\"" }, 400);
+    }
+    const raw = form.files;
+    const list = (Array.isArray(raw) ? raw : raw ? [raw] : []).filter((f): f is File => typeof f === "object" && f !== null && "arrayBuffer" in f);
+    if (list.length === 0) return c.json({ error: "no files" }, 400);
+    if (list.length > MAX_FILES) return c.json({ error: `at most ${MAX_FILES} files per task` }, 400);
+    try {
+      const files = await Promise.all(list.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) })));
+      return c.json(uploads.save(files, c.get("user")?.name ?? null), 201);
+    } catch (err) {
+      return c.json({ error: err instanceof UploadError ? err.message : message(err) }, 400);
     }
   });
 
@@ -474,7 +496,7 @@ export function createApp(s: Services) {
     const conv = myChat(c);
     if (!conv) return c.json({ error: "conversation not found" }, 404);
     const parsed = z
-      .object({ prompt: z.string().trim().min(1).max(20_000), approvalMode: z.enum(["manual", "smart", "auto"]).optional(), language: CreateRunRequest.shape.language, profile: CreateRunRequest.shape.profile })
+      .object({ prompt: z.string().trim().min(1).max(20_000), approvalMode: z.enum(["manual", "smart", "auto"]).optional(), language: CreateRunRequest.shape.language, profile: CreateRunRequest.shape.profile, uploadId: CreateRunRequest.shape.uploadId })
       .safeParse(await body(c));
     if (!parsed.success) return c.json({ error: issues(parsed.error) }, 400);
     const user = c.get("user");
@@ -679,6 +701,13 @@ export function createApp(s: Services) {
       }
       busy.set(st.agent_id, { runId: st.run_id, task: st.task ?? "", status: st.status, tool, target });
     }
+    // While the CEO reviews or sums up a run, the agents who already worked on it gather in the meeting room.
+    const meeting = new Set<string>();
+    const ceoRun = busy.get("ceo")?.runId;
+    if (ceoRun) {
+      const done = store.database.prepare("SELECT DISTINCT agent_id FROM steps WHERE run_id = ? AND agent_id IS NOT NULL AND agent_id != 'ceo' AND status IN ('succeeded', 'failed')").all(ceoRun) as { agent_id: string }[];
+      for (const d of done) meeting.add(d.agent_id);
+    }
     const wfName = (id: string) => workflows.get(id)?.name ?? id;
     const upcoming = triggers
       .list()
@@ -695,7 +724,7 @@ export function createApp(s: Services) {
       spend: { today: store.spentSince(startOfDay()), month: store.spentSince(startOfMonth()), dailyCap: config.dailyBudgetUsd, monthlyCap: config.monthlyBudgetUsd },
       projects: projects.list().slice(0, 5),
       missions: missions.list(chatUser(c), seesAll(c)).filter((m) => m.status === "active" || m.status === "paused").slice(0, 6),
-      team: agents.all().map((a) => ({ ...a.info, skills: a.skills.length, busy: busy.get(a.info.id) ?? null, overBudget: budgets.status(a.info.id).over })),
+      team: agents.all().map((a) => ({ ...a.info, skills: a.skills.length, busy: busy.get(a.info.id) ?? null, overBudget: budgets.status(a.info.id).over, meeting: meeting.has(a.info.id) && !busy.has(a.info.id) })),
     });
   });
 

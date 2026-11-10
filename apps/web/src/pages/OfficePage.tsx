@@ -6,6 +6,7 @@ import { api, errorText } from "../api.ts";
 import { go } from "../router.ts";
 import { agentName, t, type Key } from "../i18n.ts";
 import { MicButton, appendSpoken } from "../Mic.tsx";
+import { AttachButton, AttachedFiles, type Attached } from "../Attach.tsx";
 import { OfficeFloor, type FloorWorker } from "../office/OfficeFloor.tsx";
 import { eta, type MissionView } from "./MissionsPage.tsx";
 
@@ -15,7 +16,7 @@ type Hq = {
   approvals: { approvalId: string; runId: string; kind: string; agentId: string | null; prompt: string; tool: string | null; reason: string }[];
   recent: { id: string; status: string }[];
   missions: MissionView[];
-  team: { id: string; name: string; persona?: string; color: string; icon: string; description: string; busy: Busy | null }[];
+  team: { id: string; name: string; persona?: string; color: string; icon: string; description: string; busy: Busy | null; meeting?: boolean; overBudget?: boolean }[];
 };
 
 // What the bubble over a working person says.
@@ -61,6 +62,7 @@ export function OfficePage({ health, session }: { health: HealthResponse | null;
   }, [load]);
 
   const nameOf = (a: Hq["team"][number]) => a.persona || agentName(a.id, a.name);
+  const meetingOn = (hq?.team ?? []).some((a) => a.meeting);
   const workers: FloorWorker[] = useMemo(
     () =>
       (hq?.team ?? []).map((a) => ({
@@ -70,15 +72,17 @@ export function OfficePage({ health, session }: { health: HealthResponse | null;
         isBoss: a.id === "ceo",
         status: !a.busy ? "idle" : a.busy.status === "waiting_approval" ? "waiting" : "working",
         tool: a.busy?.tool ?? null,
-        label: a.busy ? (a.id === "ceo" ? t("office.planning") : activityLabel(a.busy)) : null,
+        meeting: Boolean(a.meeting),
+        label: a.busy ? (a.id === "ceo" ? (meetingOn ? t("office.reviewing") : t("office.planning")) : activityLabel(a.busy)) : null,
       })),
-    [hq],
+    [hq, meetingOn],
   );
   const board: [number, number, number] = useMemo(() => {
     const active = hq?.missions.length ?? 0;
     return [active + (hq?.approvals.length ?? 0), hq?.running.length ?? 0, hq?.recent.filter((r) => r.status === "completed").length ?? 0];
   }, [hq]);
 
+  const [attached, setAttached] = useState<Attached>(null);
   async function send() {
     const prompt = text.trim();
     if (!prompt || busy) return;
@@ -89,7 +93,8 @@ export function OfficePage({ health, session }: { health: HealthResponse | null;
         const m = await api<MissionView>("/api/missions", { body: { goal: prompt, days, intervalMinutes: interval, agentId: agentId || null } });
         setNotice({ text: t("office.missionStarted"), href: `#/missions?id=${m.id}` });
       } else {
-        const r = await api<{ runId: string }>("/api/runs", { body: { prompt, ...(agentId ? { agentId } : {}) } });
+        const r = await api<{ runId: string }>("/api/runs", { body: { prompt, ...(agentId ? { agentId } : {}), uploadId: attached?.id } });
+        setAttached(null);
         setNotice({ text: t("office.taskStarted"), href: `#/runs?run=${r.runId}` });
       }
       setText("");
@@ -182,7 +187,7 @@ export function OfficePage({ health, session }: { health: HealthResponse | null;
             <button key={a.id} role="listitem" className={`office-card ${a.busy ? "busy" : ""}`} style={{ "--agent": a.color } as React.CSSProperties} onClick={(e) => pick(a.id, { x: e.clientX, y: e.clientY })} title={a.busy?.task || a.description}>
               <span className="office-card-name">{nameOf(a)}</span>
               <span className={`chip ${a.busy ? (a.busy.status === "waiting_approval" ? "chip-warn" : "chip-ok") : ""}`}>
-                {a.busy ? (a.busy.status === "waiting_approval" ? t("office.stateWaiting") : t("office.stateWorking")) : t("office.stateIdle")}
+                {a.busy ? (a.busy.status === "waiting_approval" ? t("office.stateWaiting") : t("office.stateWorking")) : a.overBudget ? t("agents.budgetOver") : a.meeting ? t("office.stateMeeting") : t("office.stateIdle")}
               </span>
               <span className="small muted office-card-line">{a.busy ? (a.id === "ceo" ? t("office.planning") : activityLabel(a.busy)) : a.persona ? agentName(a.id, a.name) : ""}</span>
             </button>
@@ -243,11 +248,13 @@ export function OfficePage({ health, session }: { health: HealthResponse | null;
             </label>
           </div>
           <div className="office-send">
+            {days === 0 && <AttachButton value={attached} onChange={setAttached} disabled={disabled} />}
             <MicButton onText={(spoken) => setText((cur) => appendSpoken(cur, spoken))} disabled={disabled} />
             <button className="hq-new" onClick={() => void send()} disabled={!text.trim() || busy || disabled}>
               {days > 0 ? `▶ ${t("office.startMission")}` : `▶ ${t("office.start")}`}
             </button>
           </div>
+          {days === 0 && <AttachedFiles value={attached} onClear={() => setAttached(null)} />}
           {days > 0 && <p className="small muted">{t("office.missionHint", { days, n: Math.max(1, Math.round((days * 1440) / interval)) })}</p>}
           {notice && (
             <p className="small">
