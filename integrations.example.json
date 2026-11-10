@@ -107,5 +107,27 @@
       "list_tasks",
       "get_task"
     ]
+  },
+  "google": {
+    "description": "Built-in: Gmail (search, read, drafts), Google Calendar (events, Meet links) and Google Drive (find, read, new Docs) for one connected account. Everything that writes or sends waits for your approval. Set up: docs/21, then Apps → Connect Google.",
+    "type": "stdio",
+    "command": "${CLAUDESTRA_NODE}",
+    "args": [
+      "${CLAUDESTRA_ROOT}/apps/server/mcp/google.mjs"
+    ],
+    "env": {
+      "GOOGLE_CLIENT_ID": "${GOOGLE_CLIENT_ID}",
+      "GOOGLE_CLIENT_SECRET": "${GOOGLE_CLIENT_SECRET}",
+      "GOOGLE_TOKEN_FILE": "${GOOGLE_TOKEN_FILE:-}",
+      "GOOGLE_TOKEN_DEFAULT": "${CLAUDESTRA_ROOT}/data/google-token.json",
+      "GOOGLE_TEST_BASE": "${GOOGLE_TEST_BASE:-}"
+    },
+    "readTools": [
+      "gmail_search",
+      "gmail_read",
+      "calendar_list_events",
+      "drive_search",
+      "drive_read"
+    ]
   }
 }

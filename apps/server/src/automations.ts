@@ -17,6 +17,7 @@ export type Preset = {
 
 export const PRESETS: Preset[] = [
   { id: "morning-brief", template: "morning-brief", cron: "30 8 * * 1-5", fields: ["language"] },
+  { id: "inbox-digest", template: "inbox-digest", cron: "0 8 * * 1-5", fields: ["window", "drafts", "language"] },
   { id: "sprint-report", template: "sprint-report", cron: "0 17 * * 5", fields: ["sprint_hint", "language"] },
   { id: "market-watch", template: "market-watch", cron: "0 9 * * *", fields: ["topics", "competitors", "days", "language"] },
   { id: "weekly-social", template: "weekly-social", cron: "0 10 * * 1", fields: ["prompt", "count", "language"] },

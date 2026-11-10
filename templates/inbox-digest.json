@@ -1,0 +1,21 @@
+{
+  "name": "Inbox digest",
+  "description": "Every morning: reads the new mail in the connected Gmail account, says what needs you, and prepares reply drafts (saved only after you approve). Needs Google connected.",
+  "prompt": "Inbox digest for {{today}}",
+  "params": [
+    { "key": "window", "label": "Gmail search for what to read", "default": "is:unread newer_than:1d" },
+    { "key": "drafts", "label": "Prepare reply drafts (yes or no)", "default": "yes" },
+    { "key": "language", "label": "Language of the digest", "default": "Azerbaijani" },
+    { "key": "today", "label": "Date (filled in automatically)", "default": "today" }
+  ],
+  "steps": [
+    {
+      "id": "digest",
+      "agent": "assistant",
+      "task": "Prepare the inbox digest for {{today}} with the inbox-triage skill.\n\n1. Search Gmail with: {{window}}\n2. Sort the mails into Needs you, For information, Can wait and Suspicious, and write inbox/{{today}}.md in {{language}}.\n3. Look at today's calendar (mcp__google__calendar_list_events from now to the end of the day) and add a short \"Today's meetings\" section.\n4. Reply drafts: {{drafts}}. If yes, for at most 5 mails under Needs you write a reply draft with mcp__google__create_email_draft (reply_to_message_id set). Each draft waits for approval and is never sent by you.\n\nIf Google is not connected, stop and say that the owner must press Connect Google on the Apps page.",
+      "dependsOn": [],
+      "successCriteria": "inbox/{{today}}.md with the four groups and today's meetings; drafts listed in the report",
+      "loopBackTo": ""
+    }
+  ]
+}

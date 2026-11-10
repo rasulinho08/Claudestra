@@ -12,3 +12,4 @@ data/*.db-*
 integrations.json
 team/
 data/uploads/
+data/google-token.json

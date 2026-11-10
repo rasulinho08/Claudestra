@@ -27,6 +27,7 @@ import { Chats } from "./chat.ts";
 import { AgentBudgets } from "./budgets.ts";
 import { MAX_FILES, UploadError, Uploads } from "./uploads.ts";
 import { AutomationInput, Automations } from "./automations.ts";
+import { GoogleAuth } from "./google-auth.ts";
 import { MissionInput, MissionRunner, Missions, missionFile } from "./missions.ts";
 import { startOfDay, startOfMonth } from "./analytics.ts";
 import { HttpError, RunLauncher } from "./runs.ts";
@@ -67,6 +68,7 @@ export type Services = {
   missions?: Missions;
   missionRunner?: MissionRunner;
   budgets?: AgentBudgets;
+  google?: GoogleAuth;
   // Opens a folder in the OS file manager; replaceable in tests.
   openFolder?: (dir: string) => void;
 };
@@ -148,6 +150,9 @@ export function createApp(s: Services) {
   const evals = s.evals ?? new Evals(path.join(config.agentsDir, "../evals"), store, launcher, config.workspacesDir);
   const budgets = s.budgets ?? new AgentBudgets(store);
   const uploads = new Uploads(config.uploadsDir);
+  const google =
+    s.google ??
+    new GoogleAuth({ clientId: config.googleClientId, clientSecret: config.googleClientSecret, tokenFile: config.googleTokenFile, redirectUri: `${config.publicUrl ?? `http://${config.host}:${config.port}`}/api/google/callback` });
   const missions = s.missions ?? new Missions(store);
   const missionRunner = s.missionRunner ?? new MissionRunner({ missions, store, workspacesDir: config.workspacesDir, start: (req) => launcher.start(req) });
   const templatesDir = s.templatesDir ?? path.join(config.agentsDir, "../templates");
@@ -876,6 +881,35 @@ export function createApp(s: Services) {
   app.get("/api/integrations", (c) => {
     integrations.reload();
     return c.json({ error: integrations.error, servers: integrations.list(agents.all().map((a) => ({ id: a.info.id, integrations: a.integrations }))) });
+  });
+
+  // ---- Google account for the google app (docs/21) -------------------------------------------
+
+  const isOwner = (c: Context) => (c.get("user")?.role ?? "owner") === "owner";
+  app.get("/api/google/status", (c) => c.json(google.status()));
+  // Browser navigations (GET), so the owner check is done here rather than by the method-based role rule.
+  app.get("/api/google/connect", (c) => {
+    if (!isOwner(c)) return c.json({ error: "only the owner can connect Google" }, 403);
+    try {
+      return c.redirect(google.connectUrl());
+    } catch (err) {
+      return c.json({ error: message(err) }, 409);
+    }
+  });
+  app.get("/api/google/callback", async (c) => {
+    if (!isOwner(c)) return c.json({ error: "only the owner can connect Google" }, 403);
+    const back = (note: string) => c.redirect(`/#/apps?google=${encodeURIComponent(note)}`);
+    if (c.req.query("error")) return back(`error:${c.req.query("error")}`);
+    try {
+      await google.finish(c.req.query("code") ?? "", c.req.query("state") ?? "");
+      return back("connected");
+    } catch (err) {
+      return back(`error:${message(err)}`);
+    }
+  });
+  app.delete("/api/google", async (c) => {
+    await google.disconnect();
+    return c.json(google.status());
   });
 
   // ---- workflows & templates ---------------------------------------------------------------

@@ -6,7 +6,7 @@ description: Summarises status of the work, lists follow-ups as clear tasks. Use
 modelClass: cheap
 tools: [Read, Write, Glob]
 skills: [project-plan, sprint-dashboard]
-integrations: ["clickup:get_*", "clickup:list_*"]
+integrations: ["clickup:get_*", "clickup:list_*", "google:calendar_list_events"]
 limits:
   maxTurns: 10
   maxBudgetUsd: 0.10

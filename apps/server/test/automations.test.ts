@@ -10,7 +10,7 @@ import { Automations, PRESETS, contextParams } from "../src/automations.ts";
 import { parseCron } from "../src/cron.ts";
 
 const templatesDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../templates");
-const AGENTS = new Set(["project-manager", "researcher", "community-manager", "content-maker"]);
+const AGENTS = new Set(["project-manager", "researcher", "community-manager", "content-maker", "assistant"]);
 
 function setup(agents = AGENTS) {
   const store = new RunStore();

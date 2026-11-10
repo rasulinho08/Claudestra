@@ -73,6 +73,10 @@ export type Config = {
   // Extra host names the browser may use for a server bound to this computer (DNS-rebinding guard).
   allowedHosts: string[];
   // Projects (upgrade A3): Claudestra-managed project folders and the undo snapshots of applied changes.
+  // Google sign-in (docs/21): OAuth client from Google Cloud, and where the connected account's token is kept.
+  googleClientId: string | null;
+  googleClientSecret: string | null;
+  googleTokenFile: string;
   // Telegram bot (docs/18): token from @BotFather, chat ids that may use it (they act as the owner), message language.
   telegramToken: string | null;
   telegramChats: string[];
@@ -95,7 +99,7 @@ const hostOf = (url: string) => {
   }
 };
 
-export const DEFAULT_NEVER_AUTO = ["Bash:*git push*", "Bash:*rm -rf*", "Bash:*sudo *", "mcp__*__create_*", "mcp__*__delete_*", "mcp__*__update_*", "mcp__*__push_*", "mcp__*__merge_*"];
+export const DEFAULT_NEVER_AUTO = ["Bash:*git push*", "Bash:*rm -rf*", "Bash:*sudo *", "mcp__*__create_*", "mcp__*__delete_*", "mcp__*__update_*", "mcp__*__push_*", "mcp__*__merge_*", "mcp__*__send_*"];
 
 export function loadConfig(): Config {
   // Non-Claude engines have their own model ids (docs/11 §1.1); everything else uses Claude models.
@@ -165,6 +169,9 @@ export function loadConfig(): Config {
     webOrigins: list("WEB_ORIGINS", ["http://127.0.0.1:5173", "http://localhost:5173"]),
     allowedHosts: [...list("ALLOWED_HOSTS", []), ...(process.env.PUBLIC_URL ? [hostOf(process.env.PUBLIC_URL)] : [])].filter(Boolean),
     publicUrl: process.env.PUBLIC_URL?.replace(/\/+$/, "") || null,
+    googleClientId: process.env.GOOGLE_CLIENT_ID || null,
+    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || null,
+    googleTokenFile: path.resolve(repoRoot, process.env.GOOGLE_TOKEN_FILE ?? "data/google-token.json"),
     telegramToken: process.env.TELEGRAM_BOT_TOKEN || null,
     telegramChats: (process.env.TELEGRAM_ALLOWED_CHATS ?? "").split(",").map((x) => x.trim()).filter((x) => /^-?\d+$/.test(x)),
     telegramLang: process.env.TELEGRAM_LANG === "en" ? "en" : "az",

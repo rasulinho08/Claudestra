@@ -12,7 +12,7 @@ type Automation = {
 };
 
 type Days = "daily" | "weekdays" | "1" | "2" | "3" | "4" | "5" | "6" | "0";
-const ICONS: Record<string, string> = { "morning-brief": "🌅", "sprint-report": "📊", "market-watch": "📰", "weekly-social": "📣" };
+const ICONS: Record<string, string> = { "morning-brief": "🌅", "inbox-digest": "📬", "sprint-report": "📊", "market-watch": "📰", "weekly-social": "📣" };
 
 // "30 8 * * 1-5" ↔ { time: "08:30", days: "weekdays" }. Anything else is kept as written.
 export function readCron(cron: string): { time: string; days: Days } | null {

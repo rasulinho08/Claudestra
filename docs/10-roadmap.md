@@ -93,6 +93,8 @@ memory with embeddings, Slack/Telegram notifications for approvals.
   agents gathering in the meeting room while the CEO reviews.
 - Automations (docs/20): presets (morning briefing, weekly sprint report, market watch, weekly social media) that
   create a workflow and a schedule with one switch; `{{today}}` and `{{recent_work}}` for workflows; results to Telegram.
+- Google (docs/21): `google-auth.ts` (owner connects one account), built-in `google` MCP app (Gmail, Calendar, Drive;
+  writing and sending always need approval), `assistant` agent, `inbox-triage` skill, *Inbox digest* automation.
 
 ## Open questions
 1. **Primary use case** to optimise first: software building, research reports, or business analysis? (Default assumption: software building.)
