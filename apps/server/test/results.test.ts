@@ -148,12 +148,12 @@ function fakeGitHub() {
     const send = (status: number, data: unknown) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(data));
     if (req.headers.authorization !== "Bearer good") return send(401, { message: "Bad credentials" });
     let m: RegExpExecArray | null;
-    if (url === "/user") return send(200, { login: "rasul" });
+    if (url === "/user") return send(200, { login: "octo" });
     if (req.method === "POST" && url === "/user/repos") {
       const init = id();
       objects.set(init, { tree: { sha: "inittree" } });
-      repos.set(`rasul/${body.name}`, { branch: "main", head: init });
-      return send(201, { html_url: `https://github.com/rasul/${body.name}`, default_branch: "main", full_name: `rasul/${body.name}`, private: body.private });
+      repos.set(`octo/${body.name}`, { branch: "main", head: init });
+      return send(201, { html_url: `https://github.com/octo/${body.name}`, default_branch: "main", full_name: `octo/${body.name}`, private: body.private });
     }
     if ((m = /^\/repos\/([^/]+\/[^/]+)$/.exec(url))) {
       const r = repos.get(m[1]!);
@@ -204,7 +204,7 @@ test("GitHub export: creates a private repo, then adds a commit on top for the n
     ];
     const first = await exportToGitHub({ token: "good", repo: "xerc", files, message: "first", apiUrl, retryDelayMs: 1 });
     assert.equal(first.created, true);
-    assert.equal(first.repo, "rasul/xerc");
+    assert.equal(first.repo, "octo/xerc");
     assert.equal(first.files, 3);
     assert.ok(gh.calls.includes("POST /user/repos"));
     const firstTree = gh.objects.get((gh.objects.get(first.commit) as { tree: { sha: string } }).tree.sha) as { base_tree?: string; tree: { path: string; content?: string; sha?: string }[] };
@@ -213,9 +213,9 @@ test("GitHub export: creates a private repo, then adds a commit on top for the n
     assert.equal(firstTree.tree[0]!.content, "<h1>x</h1>", "text goes inline");
     assert.ok(firstTree.tree[1]!.sha && !firstTree.tree[1]!.content, "binary goes as a blob");
     assert.equal(gh.calls.filter((c) => c.endsWith("/git/blobs")).length, 2, "one rate-limited blob call retried");
-    assert.equal(gh.repos.get("rasul/xerc")!.head, first.commit);
+    assert.equal(gh.repos.get("octo/xerc")!.head, first.commit);
 
-    const second = await exportToGitHub({ token: "good", repo: "rasul/xerc", files: files.slice(0, 1), message: "second", apiUrl, retryDelayMs: 1 });
+    const second = await exportToGitHub({ token: "good", repo: "octo/xerc", files: files.slice(0, 1), message: "second", apiUrl, retryDelayMs: 1 });
     assert.equal(second.created, false);
     const commit = gh.objects.get(second.commit) as { parents: string[]; tree: { sha: string } };
     assert.deepEqual(commit.parents, [first.commit]);

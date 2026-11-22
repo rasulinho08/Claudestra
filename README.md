@@ -18,7 +18,7 @@ and sign in) or an Anthropic API key.
 
 ```bash
 npm install
-cp .env.example .env      # pick AUTH_MODE; default is claude_cli_login
+cp .env.example .env      # AUTH_MODE=demo to look around; api_key, gemini or meta for real work
 npm run dev               # server http://127.0.0.1:8787 + web http://127.0.0.1:5173
 ```
 
@@ -104,7 +104,23 @@ docs/              Design docs (source of truth)
 | 12 | [Local first & deploy](docs/12-local-first-and-deploy.md) | Local setup now, deploy checklist later |
 | 13 | [Stage & OBS](docs/13-stage-and-obs.md) | The animated robot view, second monitor and OBS setup |
 | 14 | [Running on Windows](docs/14-running-on-windows.md) | cmd setup, daily use, troubleshooting |
+| 15 | [Team server](docs/15-team-server.md) | One server for a team, people's own agents, safety rules |
+| 16 | [Social media](docs/16-social-media.md) | Community Manager, Content Maker, image cards, publishing with approval |
+| 17 | [Missions, office, voice](docs/17-missions-office-voice.md) | Days-long background work, the pixel office, speaking to the app |
+| 18 | [Telegram and budgets](docs/18-telegram-and-budgets.md) | Running the company from a phone, per-agent monthly caps |
+| 19 | [Attachments, ClickUp, meetings](docs/19-attachments-clickup-meetings.md) | Files on tasks, ClickUp app, meetings on the floor |
+| 20 | [Automations](docs/20-automations.md) | Scheduled jobs with one switch |
+| 21 | [Google](docs/21-google.md) | Gmail, Calendar and Drive with approval |
 
 Reading order: 1 → 2 → 3 → agent specs → 6 → 7 → 11.
 
 SDK option names in these docs reflect the Claude Agent SDK as of writing. **Verify against the current SDK docs before implementing.**
+
+## Contributing and security
+
+Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately as described
+in [SECURITY.md](SECURITY.md), not in public issues.
+
+Claudestra is an independent project. It is not made, endorsed or supported by Anthropic. It uses the Claude Agent
+SDK, which is installed from npm and governed by Anthropic's own terms; when you use Claude models you need your own
+Anthropic API key (or a supported cloud provider).

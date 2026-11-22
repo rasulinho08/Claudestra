@@ -28,7 +28,7 @@ Open `.env` in Notepad (`notepad .env`) and check at least:
 
 | Setting | Value |
 |---|---|
-| `AUTH_MODE` | `claude_cli_login` (your Claude login) or `api_key` (then fill `ANTHROPIC_API_KEY`) |
+| `AUTH_MODE` | `demo` to look around; `api_key` (then fill `ANTHROPIC_API_KEY`), `gemini` or `meta` for real work; `claude_cli_login` only for yourself on this PC |
 | `DEFAULT_APPROVAL_MODE` | `smart` to start; `manual` for untrusted tasks (Windows has no OS sandbox) |
 | `DAILY_BUDGET_USD` | e.g. `3`, so a mistake can never cost more than that per day |
 
@@ -135,13 +135,13 @@ is done, click **Changes** in the top bar of the task, look at the diff, untick 
 
 ## The AI team: names, training and free tools
 
-- **Agents** page: every agent has **Profile & training**. Give it a name (Rasul Fateh, Nihad Turan, Nərmin,
-  Daryanur are set already), a working style, and instructions only this agent follows. After a task, open a step
+- **Agents** page: every agent has **Profile & training**. Give it a person's name (for example
+  Aysel for the Researcher), a working style, and instructions only this agent follows. After a task, open a step
   and rate it 👍/👎 with a sentence: it becomes a lesson for that agent only.
 - **Free apps**: get a free Apify token (console.apify.com → Settings → API & Integrations), add
-  `APIFY_TOKEN=...` to `.env`, restart. Nərmin and Sales can then use Google Maps / website scrapers, also with Meta.
+  `APIFY_TOKEN=...` to `.env`, restart. The Researcher and Sales can then use Google Maps / website scrapers, also with Meta.
 - **Lead machine**: Workflows → Templates → *Lead machine (find customers)*. Fill in what you sell and the city;
-  Nərmin researches, Sales builds `sales/leads.csv` and first messages, the Marketer writes the sequence, Daryanur the
+  the Researcher studies the market, Sales builds `sales/leads.csv` and first messages, the Marketer writes the sequence, the COO the
   weekly process. Nothing is sent automatically.
 
 ## The whole team on one address

@@ -55,9 +55,13 @@ the model is always one of the four ways below.
 2. Run `claude` once in a terminal and sign in with your Claude account (browser opens).
 3. In `.env` leave `ANTHROPIC_API_KEY` empty and set `AUTH_MODE=claude_cli_login`.
 4. Start Claudestra on the **same machine**. The SDK uses the stored Claude Code login.
-5. Caveats: counts against subscription usage limits (multi-agent runs consume them quickly), terms are a grey area
-   (section 1 above), and it must be disabled when deployed. Claudestra shows a warning banner in this mode.
-   Keep `eco` profile and low budgets here.
+5. Caveats: counts against subscription usage limits (multi-agent runs consume them quickly) and is for **your
+   own use on your own computer only**. Anthropic's terms say OAuth login is meant for ordinary use of Claude Code
+   and Anthropic's own apps, that products built on the Agent SDK should use API keys, and that third-party
+   developers may not route requests through Free, Pro, Max or Ultra plan credentials on behalf of their users
+   (https://code.claude.com/docs/en/legal-and-compliance). So: never offer it to other people, never on a team
+   server. Claudestra refuses to start in this mode when `PUBLIC_URL` is set or it listens beyond this computer,
+   and shows a warning banner otherwise. Keep `eco` profile and low budgets here.
 
 **C. Observer mode (visualise your normal Claude Code)**
 Claudestra does not run the agents. You work in Claude Code as usual; Claude Code hooks post each event to

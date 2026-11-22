@@ -23,7 +23,7 @@ floor (`apps/web/src/office/`) and voice input (`Mic.tsx`), docs/17.
 ## Rules
 - Before using any Claude Agent SDK option, check the current official SDK docs (names change between versions).
 - The UI state comes only from events (doc 6). No hidden client state.
-- Auth is a single `AUTH_MODE` setting (`api_key | claude_cli_login | observer | bedrock | vertex`, doc 11 §1.1). Start local with `claude_cli_login`; `api_key` is required for deploy. Never commit secrets; `.env` stays git-ignored.
+- Auth is a single `AUTH_MODE` setting (`api_key | claude_cli_login | observer | bedrock | vertex`, doc 11 §1.1). New installs start in `demo`; `api_key` (or another provider) for real work and always for deploy. `claude_cli_login` is only for the owner's own use on their own computer (Anthropic's terms, doc 11). Never commit secrets; `.env` stays git-ignored.
 - Every agent runs as its own SDK session under the orchestrator (doc 2, option B).
 - Approval modes `manual | smart | auto` must exist from Phase 2. `auto` never bypasses sandbox, budgets, loop limits or redaction.
 - Cost features (router, profiles, caps, summaries-not-transcripts, caching) are requirements, not extras (doc 11).

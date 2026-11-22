@@ -48,6 +48,12 @@ const evals = new Evals(config.evalsDir, store, launcher, config.workspacesDir);
 evals.onTimeout = (runId) => runner.cancel(runId);
 
 const loopback = ["127.0.0.1", "localhost", "::1"].includes(config.host);
+// Anthropic does not allow third-party apps to route other people's requests through a Claude.ai subscription
+// login (docs/11 "B"). A server reachable by others must use an API key or another provider.
+if (config.authMode === "claude_cli_login" && (config.publicUrl || !loopback)) {
+  console.error("AUTH_MODE=claude_cli_login is for your own use on this computer only. A server that other people use must run on AUTH_MODE=api_key (or bedrock, vertex, gemini, meta, openai_compat). See docs/11.");
+  process.exit(1);
+}
 if (config.publicUrl && !access.enabled) {
   console.error(`PUBLIC_URL is set (${config.publicUrl}) but login is off. Set AUTH_TOKEN in .env (or add a user with \`npm run user -- add NAME owner\`) before opening Claudestra to other people.`);
   process.exit(1);

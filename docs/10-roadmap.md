@@ -95,6 +95,9 @@ memory with embeddings, Slack/Telegram notifications for approvals.
   create a workflow and a schedule with one switch; `{{today}}` and `{{recent_work}}` for workflows; results to Telegram.
 - Google (docs/21): `google-auth.ts` (owner connects one account), built-in `google` MCP app (Gmail, Calendar, Drive;
   writing and sending always need approval), `assistant` agent, `inbox-triage` skill, *Inbox digest* automation.
+- Open-source readiness: CI (`.github/workflows/ci.yml`), `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`,
+  issue and PR templates; new installs start in `demo`; `claude_cli_login` refused on a shared server (Anthropic's
+  terms, doc 11); real people's names removed from docs and tests; Hono and @hono/node-server updated (advisories).
 
 ## Open questions
 1. **Primary use case** to optimise first: software building, research reports, or business analysis? (Default assumption: software building.)

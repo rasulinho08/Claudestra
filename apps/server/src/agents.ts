@@ -17,7 +17,7 @@ const Frontmatter = z.object({
   // MCP tools this agent may use: "server" (all tools) or "server:toolGlob".
   integrations: z.array(z.string()).default([]),
   limits: z.object({ maxTurns: z.number().int().positive(), maxBudgetUsd: z.number().positive() }),
-  // A person's name for this agent (e.g. "Rasul Fateh") and how they work; both shape the prompt (training.ts).
+  // A person's name for this agent (e.g. "Aysel Mammadova") and how they work; both shape the prompt (training.ts).
   persona: z.string().max(60).optional(),
   style: z.string().max(600).optional(),
   color: z.string().default("#8a92a6"),

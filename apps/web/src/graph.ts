@@ -15,7 +15,7 @@ const FALLBACK_AGENT = (id: string): AgentInfo => ({ id, name: id === "claude-co
 
 export function agentFor(run: RunView, agentId: string): AgentInfo {
   const info = run.agents[agentId] ?? FALLBACK_AGENT(agentId);
-  // A named agent ("Rasul Fateh") shows its person's name; others their (translated) role.
+  // A named agent ("Aysel Mammadova") shows its person's name; others their (translated) role.
   const name = info.persona || agentName(agentId, info.name);
   return name === info.name ? info : { ...info, name };
 }

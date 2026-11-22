@@ -1,6 +1,6 @@
 {
   "name": "Lead machine (find customers)",
-  "description": "Nərmin researches the market, Sales builds and qualifies a lead list with first messages, the Marketer turns them into a 3-step sequence, Daryanur (COO) writes the weekly process. Nothing is sent: you approve and send.",
+  "description": "The Researcher studies the market, Sales builds and qualifies a lead list with first messages, the Marketer turns them into a 3-step sequence, the COO writes the weekly process. Nothing is sent: you approve and send.",
   "params": [
     { "key": "prompt", "label": "What do you sell, and to whom?", "default": "" },
     { "key": "region", "label": "Region or city", "default": "Bakı, Azərbaycan" },
@@ -35,7 +35,7 @@
     {
       "id": "ops",
       "agent": "coo",
-      "task": "Write ops/process.md: how to run this lead machine every week with free tools first (Claudestra schedules, Gmail by hand or n8n self-hosted, a Google Sheet as CRM), who does what (Nərmin research, Sales leads, Marketer copy, owner approves and sends), daily sending limits that keep email deliverability safe, the numbers to track (leads, replies, meetings) and where an owner approval is required. End with a checklist and the next three actions.",
+      "task": "Write ops/process.md: how to run this lead machine every week with free tools first (Claudestra schedules, Gmail by hand or n8n self-hosted, a Google Sheet as CRM), who does what (Researcher research, Sales leads, Marketer copy, owner approves and sends), daily sending limits that keep email deliverability safe, the numbers to track (leads, replies, meetings) and where an owner approval is required. End with a checklist and the next three actions.",
       "dependsOn": ["leads", "sequence"],
       "successCriteria": "ops/process.md with weekly process, KPIs, approvals and next actions",
       "loopBackTo": ""

@@ -29,7 +29,7 @@ test("budget status counts this month's spend only", () => {
   assert.equal(budgets.refusal("coder", "Coder"), null);
   spend(store, "r3", "coder", 0.5);
   assert.equal(budgets.status("coder").over, true);
-  assert.match(budgets.refusal("coder", "Fateh")!, /Fateh has used its monthly budget \(\$2\.00 of \$2\)/);
+  assert.match(budgets.refusal("coder", "Aysel")!, /Aysel has used its monthly budget \(\$2\.00 of \$2\)/);
   budgets.set("coder", 0);
   assert.equal(budgets.status("coder").monthlyUsd, null, "0 clears the cap");
 });

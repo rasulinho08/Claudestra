@@ -16,7 +16,7 @@ if (cmd === "add" && name) {
   const { user, token } = access.addUser(name, role, agentArg ?? null);
   console.log(`Added ${user.name} (${user.role}${user.agentId ? `, agent ${user.agentId}` : ""}). Token (shown once, keep it safe):\n\n  ${token}\n\nLog in at the web app with this token. Login is now required for everyone.`);
 } else if (cmd === "link" && name && roleArg) {
-  // Second argument is the agent id here: npm run user -- link nihad project-manager
+  // Second argument is the agent id here: npm run user -- link aysel project-manager
   console.log(access.setAgent(name, roleArg === "none" ? null : roleArg) ? `Linked ${name} to ${roleArg}.` : `No user named ${name}.`);
 } else if (cmd === "list") {
   const users = access.users();
