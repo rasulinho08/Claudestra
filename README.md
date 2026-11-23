@@ -121,6 +121,8 @@ SDK option names in these docs reflect the Claude Agent SDK as of writing. **Ver
 Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately as described
 in [SECURITY.md](SECURITY.md), not in public issues.
 
+Licensed under the [MIT License](LICENSE). Third-party packages keep their own licenses.
+
 Claudestra is an independent project. It is not made, endorsed or supported by Anthropic. It uses the Claude Agent
 SDK, which is installed from npm and governed by Anthropic's own terms; when you use Claude models you need your own
 Anthropic API key (or a supported cloud provider).
